@@ -3,16 +3,16 @@ import React from 'react';
 
 const Footer = () => {
   const footerLinks = {
-    'Smart Library': ['Features', 'How it Works', 'QR System', 'Auto Fine Calc'],
-    'User Roles': ['Admin Dashboard', 'Member Portal', 'Login', 'Register'],
-    'Support': ['Help Center', 'Documentation', 'Contact Us', 'FAQs'],
-    'Project': ['About Us', 'Team Members', 'Guide', 'Abstract']
+    'Library Services': ['Book Search', 'Digital Repository', 'Journal Access', 'Remote Access'],
+    'User Roles': ['Student Portal', 'Saff/Faculty', 'Librarian Admin', 'HOD Dashboard'],
+    'Quick Links': ['Library Rules', 'New Arrivals', 'Opening Hours', 'FAQs'],
+    'About VVIT': ['University Home', 'Library Team', 'Contact Us', 'Location']
   };
 
   // Team IDs from your abstract
   const teamMembers = [
     '23BQ1A05E3',
-    '23BQ1A05H4', 
+    '23BQ1A05H4',
     '23BQ1A05I7',
     '23BQ1A05E6'
   ];
@@ -57,9 +57,9 @@ const Footer = () => {
           {/* Brand & Description */}
           <div className="lg:col-span-2">
             <div className="flex items-center space-x-2 mb-4">
-              <img 
-                src="/VVIT_logo.png" 
-                alt="VVIT Logo" 
+              <img
+                src="/VVIT_logo.png"
+                alt="VVIT Logo"
                 className="h-12 w-auto"
                 onError={(e) => {
                   // Fallback to text if image doesn't load
@@ -73,8 +73,8 @@ const Footer = () => {
               </span>
             </div>
             <p className="text-gray-400 mb-6 max-w-md">
-              A Smart Online Library Management System that digitizes and automates 
-              library operations. Featuring QR code transactions, automated fine calculation, 
+              A Smart Online Library Management System that digitizes and automates
+              library operations. Featuring QR code transactions, automated fine calculation,
               and real-time tracking to replace traditional manual processes.
             </p>
             <div className="flex flex-wrap gap-4">
@@ -98,8 +98,8 @@ const Footer = () => {
               <ul className="space-y-2">
                 {links.map((link) => (
                   <li key={link}>
-                    <a 
-                      href="#" 
+                    <a
+                      href="#"
                       className="text-gray-400 hover:text-white transition-colors duration-200 hover:underline"
                     >
                       {link}

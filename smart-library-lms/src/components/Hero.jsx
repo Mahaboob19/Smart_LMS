@@ -1,4 +1,4 @@
-// components/Hero.jsx - Updated without Heroicons
+// components/Hero.jsx
 import React from 'react';
 
 const Hero = () => {
@@ -27,24 +27,24 @@ const Hero = () => {
         {/* Left Content */}
         <div className="md:w-1/2">
           <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-gray-900 leading-tight">
-            Modern Library
-            <span className="text-blue-600 block">Management System</span>
+            VVIT University
+            <span className="text-blue-600 block">Smart Library</span>
           </h1>
           <p className="text-gray-600 text-lg mt-6 mb-8 max-w-2xl">
-            Streamline your library operations with our all-in-one digital solution. 
-            Manage books, members, and transactions efficiently with an intuitive interface.
+            Access thousands of books, journals, and digital resources.
+            Manage your borrowings and fines seamlessly with our digital smart system.
           </p>
           <div className="flex flex-col sm:flex-row gap-4">
             <button className="bg-blue-600 text-white px-8 py-3 rounded-lg hover:bg-blue-700 transition-colors duration-200 font-medium text-lg flex items-center justify-center gap-2">
-              Start Free Trial
+              Learn More
               <ArrowRightIcon />
             </button>
             <button className="border-2 border-gray-300 text-gray-700 px-8 py-3 rounded-lg hover:border-blue-600 hover:text-blue-600 transition-colors duration-200 font-medium text-lg">
-              Schedule Demo
+              Explore Features
             </button>
           </div>
           <p className="text-gray-500 text-sm mt-4">
-            No credit card required • 14-day free trial • Cancel anytime
+            University ID required for borrowing • 24/7 Digital Access
           </p>
         </div>
 
@@ -89,7 +89,7 @@ const Hero = () => {
                 </div>
               </div>
             </div>
-            
+
             {/* Floating Elements */}
             <div className="absolute -top-4 -right-4 bg-white p-3 rounded-xl shadow-lg">
               <div className="flex items-center gap-2">

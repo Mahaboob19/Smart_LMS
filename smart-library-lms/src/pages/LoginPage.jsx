@@ -1,294 +1,192 @@
-// // pages/LoginPage.jsx
-// import React, { useState } from 'react';
-// import { useNavigate } from 'react-router-dom';
-// import LoginSelection from '../components/LoginSelection';
-// import AdminLogin from '../components/AdminLogin';
-// import UserLogin from '../components/UserLogin';
-
-// const LoginPage = () => {
-//   const [activeTab, setActiveTab] = useState('selection'); // 'selection', 'admin', 'user'
-//   const [loginType, setLoginType] = useState(''); // 'librarian', 'hod', 'student', 'staff'
-//   const navigate = useNavigate();
-
-//   const handleBackToSelection = () => {
-//     setActiveTab('selection');
-//     setLoginType('');
-//   };
-
-//   const handleAdminSelect = (type) => {
-//     setLoginType(type);
-//     setActiveTab('admin');
-//   };
-
-//   const handleUserSelect = (type) => {
-//     setLoginType(type);
-//     setActiveTab('user');
-//   };
-
-//   const handleSignupRedirect = () => {
-//     navigate('/signup');
-//   };
-
-//   return (
-//     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50/30 pt-20">
-//       <div className="container mx-auto px-6 py-8">
-//         <div className="max-w-4xl mx-auto">
-//           {/* Header */}
-//           <div className="text-center mb-8">
-//             <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">
-//               VVIT University LMS
-//             </h1>
-//             <p className="text-gray-600">Login to access library services</p>
-//           </div>
-
-//           {/* Login Card */}
-//           <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
-//             {/* Progress Bar */}
-//             <div className="h-1 bg-gray-100">
-//               <div className={`h-full ${activeTab === 'selection' ? 'w-1/4' : activeTab === 'admin' ? 'w-2/4' : 'w-3/4'} bg-[#0a3d62] transition-all duration-300`}></div>
-//             </div>
-
-//             <div className="p-6 md:p-8">
-//               {/* Back Button (when not in selection) */}
-//               {activeTab !== 'selection' && (
-//                 <button
-//                   onClick={handleBackToSelection}
-//                   className="flex items-center text-gray-600 hover:text-[#0a3d62] mb-6 transition-colors"
-//                 >
-//                   <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-//                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-//                   </svg>
-//                   Back to Selection
-//                 </button>
-//               )}
-
-//               {/* Render Active Component */}
-//               {activeTab === 'selection' && (
-//                 <LoginSelection 
-//                   onAdminSelect={handleAdminSelect}
-//                   onUserSelect={handleUserSelect}
-//                   onSignupRedirect={handleSignupRedirect}
-//                 />
-//               )}
-              
-//               {activeTab === 'admin' && (
-//                 <AdminLogin loginType={loginType} />
-//               )}
-              
-//               {activeTab === 'user' && (
-//                 <UserLogin loginType={loginType} />
-//               )}
-//             </div>
-//           </div>
-
-//           {/* Footer Note */}
-//           <div className="text-center mt-8 text-gray-500 text-sm">
-//             <p>Having trouble logging in? Contact library support at lms.cs@vvitu.ac.in</p>
-//           </div>
-//         </div>
-//       </div>
-//     </div>
-//   );
-// };
-
-// export default LoginPage;
-
-
-// pages/LoginPage.jsx - Updated with backend integration
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import LoginSelection from '../components/LoginSelection';
-import AdminLogin from '../components/AdminLogin';
-import UserLogin from '../components/UserLogin';
+// pages/LoginPage.jsx
+import React, { useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import MinimalHeader from '../components/MinimalHeader';
 import { authAPI } from '../api/auth';
 
 const LoginPage = () => {
-  const [activeTab, setActiveTab] = useState('selection');
-  const [loginType, setLoginType] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    email: '',
+    password: '',
+  });
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
-  // Check if user is already logged in
-  useEffect(() => {
-    if (authAPI.isAuthenticated()) {
-      const user = authAPI.getCurrentUser();
-      // Redirect based on user type
-      switch (user.userType) {
-        case 'student':
-          navigate('/student-dashboard');
-          break;
-        case 'admin':
-        case 'librarian':
-        case 'hod':
-          navigate('/admin-dashboard');
-          break;
-        case 'staff':
-          navigate('/user-dashboard');
-          break;
-        default:
-          navigate('/');
-      }
-    }
-  }, [navigate]);
-
-  const handleBackToSelection = () => {
-    setActiveTab('selection');
-    setLoginType('');
+  const handleChange = (e) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value,
+    });
     setError('');
   };
 
-  const handleAdminSelect = (type) => {
-    setLoginType(type);
-    setActiveTab('admin');
-  };
-
-  const handleUserSelect = (type) => {
-    setLoginType(type);
-    setActiveTab('user');
-  };
-
-  const handleSignupRedirect = () => {
-    navigate('/signup');
-  };
-
-  const handleLogin = async (email, password) => {
-    setLoading(true);
+  const handleSubmit = async (e) => {
+    e.preventDefault();
     setError('');
-    
+    setIsLoading(true);
+
     try {
-      let userType;
-      switch(loginType) {
-        case 'librarian':
-          userType = 'librarian';
-          break;
-        case 'hod':
-          userType = 'hod';
-          break;
-        case 'staff':
-          userType = 'staff';
-          break;
-        case 'student':
-          userType = 'student';
-          break;
-        default:
-          userType = 'student';
-      }
+      const result = await authAPI.login(formData.email, formData.password);
       
-      const response = await authAPI.login(email, password, userType);
-      
-      if (response.success) {
-        // Redirect based on user type
-        switch (response.user.userType) {
-          case 'student':
-            navigate('/student-dashboard');
-            break;
-          case 'admin':
-          case 'librarian':
-          case 'hod':
-            navigate('/admin-dashboard');
-            break;
-          case 'staff':
-            navigate('/user-dashboard');
-            break;
-          default:
-            navigate('/');
-        }
+      if (result.success) {
+        // Redirect to root (dashboard)
+        navigate('/');
+      } else {
+        setError(result.error || 'Login failed. Please try again.');
       }
     } catch (err) {
-      setError(err.message || 'Login failed. Please try again.');
+      setError('An error occurred. Please try again.');
+      console.error('Login error:', err);
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50/30 pt-20">
-      <div className="container mx-auto px-6 py-8">
-        <div className="max-w-4xl mx-auto">
-          {/* Header */}
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50/30">
+      <MinimalHeader />
+      
+      <div className="container mx-auto px-6 py-16 md:py-24">
+        <div className="max-w-md mx-auto">
+          {/* Logo and College Name */}
           <div className="text-center mb-8">
-            <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">
-              VVIT University Library System
-            </h1>
-            <p className="text-gray-600">Login to access library services</p>
-          </div>
-
-          {/* Error Message */}
-          {error && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-              <div className="flex items-center">
-                <svg className="h-5 w-5 text-red-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <p className="text-red-600">{error}</p>
+            <div className="flex items-center justify-center mb-4">
+              <img
+                src="/VVIT_logo.png"
+                alt="VVIT Logo"
+                className="h-16 w-auto"
+                onError={(e) => {
+                  e.target.style.display = 'none';
+                  const fallback = document.getElementById('logo-fallback-login');
+                  if (fallback) fallback.style.display = 'flex';
+                }}
+              />
+              <div id="logo-fallback-login" className="hidden items-center">
+                <div className="h-16 w-16 bg-blue-600 rounded-lg flex items-center justify-center mr-3">
+                  <span className="text-white font-bold text-xl">VVIT</span>
+                </div>
               </div>
             </div>
-          )}
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">
+              VVIT University
+            </h1>
+            <p className="text-gray-600">
+              Smart<span className="text-blue-600 font-semibold">Library</span> Management System
+            </p>
+          </div>
 
-          {/* Login Card */}
-          <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
-            {/* Progress Bar */}
-            <div className="h-1 bg-gray-100">
-              <div className={`h-full ${activeTab === 'selection' ? 'w-1/4' : activeTab === 'admin' ? 'w-2/4' : 'w-3/4'} bg-blue-600 transition-all duration-300`}></div>
-            </div>
+          {/* Login Form Card */}
+          <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
+            <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">
+              Login to Your Account
+            </h2>
 
-            <div className="p-6 md:p-8">
-              {/* Back Button (when not in selection) */}
-              {activeTab !== 'selection' && (
-                <button
-                  onClick={handleBackToSelection}
-                  className="flex items-center text-gray-600 hover:text-blue-600 mb-6 transition-colors"
-                  disabled={loading}
-                >
-                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                  </svg>
-                  Back to Selection
-                </button>
-              )}
+            {error && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-sm text-red-600">{error}</p>
+              </div>
+            )}
 
-              {/* Loading Overlay */}
-              {loading && (
-                <div className="absolute inset-0 bg-white/80 flex items-center justify-center z-10 rounded-2xl">
-                  <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-                    <p className="mt-4 text-gray-600">Logging in...</p>
-                  </div>
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Email Field */}
+              <div>
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+                  Email Address
+                </label>
+                <input
+                  type="email"
+                  id="email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                  required
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200 outline-none"
+                  placeholder="Enter your email"
+                />
+              </div>
+
+              {/* Password Field */}
+              <div>
+                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+                  Password
+                </label>
+                <input
+                  type="password"
+                  id="password"
+                  name="password"
+                  value={formData.password}
+                  onChange={handleChange}
+                  required
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200 outline-none"
+                  placeholder="Enter your password"
+                />
+              </div>
+
+              {/* Remember Me & Forgot Password */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <input
+                    id="remember-me"
+                    name="remember-me"
+                    type="checkbox"
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  />
+                  <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-700">
+                    Remember me
+                  </label>
                 </div>
-              )}
+                <a href="#" className="text-sm text-blue-600 hover:text-blue-700 font-medium">
+                  Forgot password?
+                </a>
+              </div>
 
-              {/* Render Active Component */}
-              {activeTab === 'selection' && (
-                <LoginSelection 
-                  onAdminSelect={handleAdminSelect}
-                  onUserSelect={handleUserSelect}
-                  onSignupRedirect={handleSignupRedirect}
-                />
-              )}
-              
-              {activeTab === 'admin' && (
-                <AdminLogin 
-                  loginType={loginType} 
-                  onLogin={handleLogin}
-                  loading={loading}
-                />
-              )}
-              
-              {activeTab === 'user' && (
-                <UserLogin 
-                  loginType={loginType} 
-                  onLogin={handleLogin}
-                  loading={loading}
-                />
-              )}
+              {/* Submit Button */}
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors duration-200 font-medium text-lg shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {isLoading ? (
+                  <>
+                    <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Logging in...
+                  </>
+                ) : (
+                  'Login'
+                )}
+              </button>
+            </form>
+
+            {/* Signup Links */}
+            <div className="mt-8 pt-6 border-t border-gray-200">
+              <p className="text-center text-sm text-gray-600 mb-4">
+                Don't have an account? Sign up as:
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <button
+                  onClick={() => navigate('/signup?type=student-staff')}
+                  className="flex-1 text-center px-4 py-2 border-2 border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50 transition-colors duration-200 font-medium text-sm"
+                >
+                  Student/Staff
+                </button>
+                <button
+                  onClick={() => navigate('/signup?type=admin')}
+                  className="flex-1 text-center px-4 py-2 border-2 border-purple-600 text-purple-600 rounded-lg hover:bg-purple-50 transition-colors duration-200 font-medium text-sm"
+                >
+                  Principal/HOD/Librarian
+                </button>
+              </div>
             </div>
           </div>
 
-          {/* Footer Note */}
-          <div className="text-center mt-8 text-gray-500 text-sm">
-            <p>Having trouble logging in? Contact library support at library@vvit.edu</p>
-          </div>
+          {/* Additional Info */}
+          <p className="text-center text-sm text-gray-500 mt-6">
+            Need help? <a href="#contact" className="text-blue-600 hover:text-blue-700 font-medium">Contact Support</a>
+          </p>
         </div>
       </div>
     </div>

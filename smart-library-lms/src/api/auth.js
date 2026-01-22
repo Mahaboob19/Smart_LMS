@@ -1,93 +1,125 @@
 // api/auth.js
-import api from './axiosConfig';
+const API_BASE_URL = 'http://localhost:5000/api';
+
+// Store token in localStorage
+const setToken = (token) => {
+  localStorage.setItem('token', token);
+};
+
+const getToken = () => {
+  return localStorage.getItem('token');
+};
+
+const removeToken = () => {
+  localStorage.removeItem('token');
+  localStorage.removeItem('user');
+};
+
+const setUser = (user) => {
+  localStorage.setItem('user', JSON.stringify(user));
+};
+
+const getUser = () => {
+  const userStr = localStorage.getItem('user');
+  return userStr ? JSON.parse(userStr) : null;
+};
 
 export const authAPI = {
-  // Register user
+  // Register
   register: async (userData) => {
     try {
-      const response = await api.post('/auth/register', userData);
-      if (response.data.success) {
-        // Store token and user data
-        localStorage.setItem('token', response.data.token);
-        localStorage.setItem('user', JSON.stringify(response.data.user));
-      }
-      return response.data;
-    } catch (error) {
-      throw error.response?.data || { message: 'Network error' };
-    }
-  },
-
-  // Login user
-  login: async (email, password, userType) => {
-    try {
-      const response = await api.post('/auth/login', { 
-        email, 
-        password, 
-        userType 
+      const response = await fetch(`${API_BASE_URL}/auth/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(userData),
       });
-      if (response.data.success) {
-        // Store token and user data
-        localStorage.setItem('token', response.data.token);
-        localStorage.setItem('user', JSON.stringify(response.data.user));
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setToken(data.token);
+        setUser(data.user);
+        return { success: true, data };
+      } else {
+        return { success: false, error: data.message || 'Registration failed' };
       }
-      return response.data;
     } catch (error) {
-      throw error.response?.data || { message: 'Network error' };
+      return { success: false, error: 'Network error. Please check if the server is running.' };
     }
   },
 
-  // Logout user
+  // Login
+  login: async (email, password) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setToken(data.token);
+        setUser(data.user);
+        return { success: true, data };
+      } else {
+        return { success: false, error: data.message || 'Login failed' };
+      }
+    } catch (error) {
+      return { success: false, error: 'Network error. Please check if the server is running.' };
+    }
+  },
+
+  // Logout
   logout: () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    window.location.href = '/login';
+    removeToken();
+  },
+
+  // Check if authenticated
+  isAuthenticated: () => {
+    return !!getToken();
   },
 
   // Get current user
   getCurrentUser: () => {
-    const userStr = localStorage.getItem('user');
-    if (userStr) {
-      return JSON.parse(userStr);
-    }
-    return null;
+    return getUser();
   },
 
   // Get token
   getToken: () => {
-    return localStorage.getItem('token');
+    return getToken();
   },
 
-  // Check if user is authenticated
-  isAuthenticated: () => {
-    return !!localStorage.getItem('token');
-  },
-
-  // Get user type
-  getUserType: () => {
-    const user = authAPI.getCurrentUser();
-    return user?.userType;
-  },
-
-  // Change password
-  changePassword: async (currentPassword, newPassword) => {
+  // Get current user from server
+  getMe: async () => {
     try {
-      const response = await api.post('/auth/change-password', {
-        currentPassword,
-        newPassword
+      const token = getToken();
+      if (!token) {
+        return { success: false, error: 'No token found' };
+      }
+
+      const response = await fetch(`${API_BASE_URL}/auth/me`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
       });
-      return response.data;
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setUser(data.user);
+        return { success: true, data };
+      } else {
+        removeToken();
+        return { success: false, error: data.message || 'Authentication failed' };
+      }
     } catch (error) {
-      throw error.response?.data || { message: 'Network error' };
+      return { success: false, error: 'Network error' };
     }
   },
-
-  // Get profile
-  getProfile: async () => {
-    try {
-      const response = await api.get('/auth/me');
-      return response.data;
-    } catch (error) {
-      throw error.response?.data || { message: 'Network error' };
-    }
-  }
 };

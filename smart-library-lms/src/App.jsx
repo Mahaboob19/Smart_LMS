@@ -1,29 +1,46 @@
-// App.jsx - Add Student Dashboard route
+// App.jsx
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
-import AdminDashboard from './pages/AdminDashboard';
-import UserDashboard from './pages/UserDashboard';
-import StudentDashboard from './pages/StudentDashboard';
+import DashboardPage from './pages/DashboardPage';
+import AdminManagementPage from './pages/AdminManagementPage';
 import ProtectedRoute from './components/ProtectedRoute';
+import { authAPI } from './api/auth';
+
+// Component to handle root route - show dashboard if logged in, landing if not
+const RootRoute = () => {
+  if (authAPI.isAuthenticated()) {
+    return <DashboardPage />;
+  }
+  return <LandingPage />;
+};
 
 function App() {
   return (
     <Router>
       <Routes>
-        <Route path="/" element={<LandingPage />} />
+        <Route path="/" element={<RootRoute />} />
+        <Route path="/landing" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
-        <Route path="/admin-dashboard" element={<AdminDashboard />} />
-        <Route path="/user-dashboard" element={<UserDashboard />} />
-        <Route path="/student-dashboard" element={<StudentDashboard />} />
-        <Route path="/admin-dashboard" element={
-          <ProtectedRoute allowedRoles={['admin', 'librarian', 'hod']}>
-            <AdminDashboard />
-          </ProtectedRoute>
-        } />
+        <Route 
+          path="/dashboard" 
+          element={
+            <ProtectedRoute>
+              <DashboardPage />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/admin/management" 
+          element={
+            <ProtectedRoute>
+              <AdminManagementPage />
+            </ProtectedRoute>
+          } 
+        />
       </Routes>
     </Router>
   );

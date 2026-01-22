@@ -1,0 +1,205 @@
+// pages/DashboardPage.jsx
+import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import Header from '../components/Header';
+import MinimalFooter from '../components/MinimalFooter';
+import { authAPI } from '../api/auth';
+
+const DashboardPage = () => {
+  const navigate = useNavigate();
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      if (!authAPI.isAuthenticated()) {
+        navigate('/login');
+        return;
+      }
+
+      const currentUser = authAPI.getCurrentUser();
+      if (currentUser) {
+        setUser(currentUser);
+        setLoading(false);
+      } else {
+        // Try to get user from server
+        const result = await authAPI.getMe();
+        if (result.success) {
+          setUser(result.data.user);
+        } else {
+          navigate('/login');
+        }
+        setLoading(false);
+      }
+    };
+
+    checkAuth();
+  }, [navigate]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50/30 flex items-center justify-center">
+        <div className="text-center">
+          <svg className="animate-spin h-12 w-12 text-blue-600 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
+
+  const getUserTypeLabel = () => {
+    const typeMap = {
+      student: 'Student',
+      staff: 'Staff',
+      admin: 'Administrator',
+      librarian: 'Librarian',
+      hod: 'Head of Department',
+      principal: 'Principal'
+    };
+    return typeMap[user.userType] || user.userType;
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50/30">
+      <Header />
+      
+      <div className="container mx-auto px-6 py-16">
+        <div className="max-w-6xl mx-auto">
+          {/* Welcome Section */}
+          <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100 mb-8">
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900 mb-2">
+                  Welcome back, {user.firstName}!
+                </h1>
+                <p className="text-gray-600">
+                  {getUserTypeLabel()} Dashboard
+                </p>
+              </div>
+              <div className="text-right">
+                <div className="text-sm text-gray-500">Library Card</div>
+                <div className="text-lg font-semibold text-blue-600">
+                  {user.libraryCardNumber || 'N/A'}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* User Info Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+            <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">Personal Information</h3>
+                <svg className="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+              </div>
+              <div className="space-y-2 text-sm">
+                <div>
+                  <span className="text-gray-500">Name:</span>
+                  <span className="ml-2 font-medium text-gray-900">
+                    {user.firstName} {user.lastName}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-gray-500">Email:</span>
+                  <span className="ml-2 font-medium text-gray-900">{user.email}</span>
+                </div>
+                {user.rollNumber && (
+                  <div>
+                    <span className="text-gray-500">Roll Number:</span>
+                    <span className="ml-2 font-medium text-gray-900">{user.rollNumber}</span>
+                  </div>
+                )}
+                {user.staffId && (
+                  <div>
+                    <span className="text-gray-500">Staff ID:</span>
+                    <span className="ml-2 font-medium text-gray-900">{user.staffId}</span>
+                  </div>
+                )}
+                {user.department && (
+                  <div>
+                    <span className="text-gray-500">Department:</span>
+                    <span className="ml-2 font-medium text-gray-900">{user.department}</span>
+                  </div>
+                )}
+                {user.year && (
+                  <div>
+                    <span className="text-gray-500">Year:</span>
+                    <span className="ml-2 font-medium text-gray-900">{user.year}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">Account Type</h3>
+                <svg className="h-6 w-6 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                </svg>
+              </div>
+              <div className="text-center">
+                <div className="text-3xl font-bold text-blue-600 mb-2">
+                  {getUserTypeLabel()}
+                </div>
+                <div className="text-sm text-gray-500">
+                  {user.userType === 'student' || user.userType === 'staff' 
+                    ? 'Regular User' 
+                    : 'Administrative Access'}
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">Quick Actions</h3>
+                <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+              </div>
+              <div className="space-y-2">
+                <button className="w-full text-left px-4 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors text-sm font-medium">
+                  Browse Books
+                </button>
+                <button className="w-full text-left px-4 py-2 bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 transition-colors text-sm font-medium">
+                  My Borrowings
+                </button>
+                {(user.userType === 'admin' || user.userType === 'principal') && (
+                  <button
+                    onClick={() => navigate('/admin/management')}
+                    className="w-full text-left px-4 py-2 bg-orange-50 text-orange-700 rounded-lg hover:bg-orange-100 transition-colors text-sm font-medium"
+                  >
+                    Admin Management
+                  </button>
+                )}
+                <button className="w-full text-left px-4 py-2 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors text-sm font-medium">
+                  View Profile
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Placeholder for future features */}
+          <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">Dashboard Overview</h2>
+            <p className="text-gray-600">
+              Welcome to your personalized dashboard. More features will be available soon.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <MinimalFooter />
+    </div>
+  );
+};
+
+export default DashboardPage;
