@@ -1,5 +1,5 @@
 // api/auth.js
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
 // Store token in localStorage
 const setToken = (token) => {
@@ -46,6 +46,10 @@ export const authAPI = {
         return { success: false, error: data.message || 'Registration failed' };
       }
     } catch (error) {
+      console.error('Registration error:', error);
+      if (error.message && (error.message.includes('Failed to fetch') || error.message.includes('NetworkError'))) {
+        return { success: false, error: 'Cannot connect to server. Please ensure the backend server is running on port 5000.' };
+      }
       return { success: false, error: 'Network error. Please check if the server is running.' };
     }
   },
@@ -71,6 +75,10 @@ export const authAPI = {
         return { success: false, error: data.message || 'Login failed' };
       }
     } catch (error) {
+      console.error('Login error:', error);
+      if (error.message && (error.message.includes('Failed to fetch') || error.message.includes('NetworkError'))) {
+        return { success: false, error: 'Cannot connect to server. Please ensure the backend server is running on port 5000.' };
+      }
       return { success: false, error: 'Network error. Please check if the server is running.' };
     }
   },
@@ -119,6 +127,10 @@ export const authAPI = {
         return { success: false, error: data.message || 'Authentication failed' };
       }
     } catch (error) {
+      console.error('GetMe error:', error);
+      if (error.message && (error.message.includes('Failed to fetch') || error.message.includes('NetworkError'))) {
+        return { success: false, error: 'Cannot connect to server. Please ensure the backend server is running.' };
+      }
       return { success: false, error: 'Network error' };
     }
   },

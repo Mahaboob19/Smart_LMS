@@ -18,12 +18,30 @@ app.use((req, res, next) => {
 app.use(express.json());
 
 // Connect to MongoDB
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/library_management', {
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/library_management';
+
+mongoose.connect(MONGODB_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 })
-.then(() => console.log('✅ MongoDB connected'))
-.catch(err => console.error('❌ MongoDB error:', err));
+.then(() => {
+  console.log('✅ MongoDB connected successfully');
+  const dbName = MONGODB_URI.includes('/') ? MONGODB_URI.split('/').pop() : 'library_management';
+  console.log(`📊 Database: ${dbName}`);
+})
+.catch(err => {
+  console.error('\n❌ MongoDB connection error:', err.message);
+  console.error('\n⚠️  Please ensure MongoDB is running:');
+  console.error('   1. Install MongoDB: https://www.mongodb.com/try/download/community');
+  console.error('   2. Start MongoDB service:');
+  console.error('      - Windows: Check Services (services.msc)');
+  console.error('      - macOS: brew services start mongodb-community');
+  console.error('      - Linux: sudo systemctl start mongod');
+  console.error('   3. Or use MongoDB Atlas: Update MONGODB_URI in .env file');
+  console.error('   4. Test connection: mongosh\n');
+  console.error('⚠️  Server will start but API calls will fail until MongoDB is connected.\n');
+  // Don't exit - allow server to start but API calls will fail gracefully
+});
 
 // User Schema
 const userSchema = new mongoose.Schema({
@@ -97,6 +115,14 @@ const ADMIN_AUTH_CODE = process.env.ADMIN_AUTH_CODE || 'VVIT_ADMIN_2024';
 // Register
 app.post('/api/auth/register', async (req, res) => {
   try {
+    // Check MongoDB connection
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({
+        success: false,
+        message: 'Database connection not available. Please ensure MongoDB is running.'
+      });
+    }
+
     const { firstName, lastName, email, password, userType, rollNumber, staffId, department, year, adminCode } = req.body;
     
     // Validate department for HOD
@@ -211,6 +237,14 @@ app.post('/api/auth/register', async (req, res) => {
 // Login
 app.post('/api/auth/login', async (req, res) => {
   try {
+    // Check MongoDB connection
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({
+        success: false,
+        message: 'Database connection not available. Please ensure MongoDB is running.'
+      });
+    }
+
     const { email, password } = req.body;
     
     // Find user
@@ -450,14 +484,40 @@ app.get('/api/admin/auth-codes', verifyToken, async (req, res) => {
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
+  const dbStatus = mongoose.connection.readyState;
+  const dbStatusText = {
+    0: 'disconnected',
+    1: 'connected',
+    2: 'connecting',
+    3: 'disconnecting'
+  };
+
   res.json({
-    status: 'healthy',
-    timestamp: new Date().toISOString()
+    status: dbStatus === 1 ? 'healthy' : 'unhealthy',
+    database: dbStatusText[dbStatus] || 'unknown',
+    timestamp: new Date().toISOString(),
+    message: dbStatus === 1 
+      ? 'Server and database are running correctly' 
+      : 'Database connection issue. Please check MongoDB.'
   });
 });
 
 const PORT = process.env.PORT || 5000;
+
+// Start server
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
-  console.log(`📝 Admin Auth Code: ${ADMIN_AUTH_CODE}`);
+  console.log('\n🚀 ========================================');
+  console.log(`   Server running on http://localhost:${PORT}`);
+  console.log('🚀 ========================================\n');
+  console.log('📝 Configuration:');
+  console.log(`   - Port: ${PORT}`);
+  console.log(`   - MongoDB: ${MONGODB_URI.split('@').pop() || MONGODB_URI}`);
+  console.log(`   - Admin Auth Code: ${ADMIN_AUTH_CODE}`);
+  console.log('\n📚 Available Endpoints:');
+  console.log('   - POST /api/auth/register');
+  console.log('   - POST /api/auth/login');
+  console.log('   - GET  /api/auth/me');
+  console.log('   - GET  /api/departments');
+  console.log('   - GET  /api/health');
+  console.log('\n✅ Server ready!\n');
 });

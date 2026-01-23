@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authAPI } from '../api/auth';
 
-const Header = () => {
+const Header = ({ customNavItems, activeSection, onNavClick }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [user, setUser] = useState(null);
@@ -21,12 +21,14 @@ const Header = () => {
     checkAuth();
   }, []);
 
-  const navItems = [
+  const defaultNavItems = [
     { name: 'Home', href: '/' },
     { name: 'Features', href: '#features' },
     { name: 'About', href: '#about' },
     { name: 'Contact', href: '#contact' },
   ];
+
+  const displayNavItems = customNavItems || defaultNavItems;
 
   const handleLoginClick = () => {
     navigate('/login');
@@ -43,6 +45,14 @@ const Header = () => {
     setShowDropdown(false);
     // Navigate to profile page or show profile modal
     // For now, just close dropdown
+  };
+
+  const handleNavItemClick = (e, item) => {
+    if (customNavItems && onNavClick) {
+      e.preventDefault();
+      onNavClick(item.id);
+      setIsMenuOpen(false);
+    }
   };
 
   // Close dropdown when clicking outside
@@ -95,14 +105,17 @@ const Header = () => {
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center space-x-8">
-            {!isLoggedIn && navItems.map((item) => (
+            {(isLoggedIn || !customNavItems) && displayNavItems.map((item) => (
               <a
                 key={item.name}
-                href={item.href}
-                className="text-gray-700 hover:text-blue-600 font-medium transition-colors duration-200 relative group"
+                href={item.href || '#'}
+                onClick={(e) => handleNavItemClick(e, item)}
+                className={`text-gray-700 hover:text-blue-600 font-medium transition-colors duration-200 relative group cursor-pointer ${activeSection && activeSection === item.id ? 'text-blue-600' : ''
+                  }`}
               >
                 {item.name}
-                <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-blue-600 group-hover:w-full transition-all duration-300"></span>
+                <span className={`absolute -bottom-1 left-0 h-0.5 bg-blue-600 transition-all duration-300 ${activeSection && activeSection === item.id ? 'w-full' : 'w-0 group-hover:w-full'
+                  }`}></span>
               </a>
             ))}
             {isLoggedIn ? (
@@ -151,8 +164,8 @@ const Header = () => {
             )}
           </div>
 
-          {/* Mobile Menu Button - Only show when not logged in */}
-          {!isLoggedIn && (
+          {/* Mobile Menu Button - Only show when not logged in OR if customNavItems exist */}
+          {(!isLoggedIn || customNavItems) && (
             <button
               className="md:hidden"
               onClick={() => setIsMenuOpen(!isMenuOpen)}
@@ -162,9 +175,9 @@ const Header = () => {
               </svg>
             </button>
           )}
-          
-          {/* User Icon for Mobile when logged in */}
-          {isLoggedIn && (
+
+          {/* User Icon for Mobile when logged in and NO custom items (default behavior) */}
+          {isLoggedIn && !customNavItems && (
             <div className="md:hidden relative">
               <button
                 onClick={() => setShowDropdown(!showDropdown)}
@@ -210,12 +223,13 @@ const Header = () => {
         {isMenuOpen && (
           <div className="md:hidden mt-4 pb-4">
             <div className="flex flex-col space-y-4">
-              {!isLoggedIn && navItems.map((item) => (
+              {(isLoggedIn || !customNavItems) && displayNavItems.map((item) => (
                 <a
                   key={item.name}
-                  href={item.href}
-                  className="text-gray-700 hover:text-blue-600 font-medium py-2 transition-colors duration-200 border-b border-gray-100 hover:border-blue-600"
-                  onClick={() => setIsMenuOpen(false)}
+                  href={item.href || '#'}
+                  onClick={(e) => handleNavItemClick(e, item)}
+                  className={`text-gray-700 hover:text-blue-600 font-medium py-2 transition-colors duration-200 border-b border-gray-100 hover:border-blue-600 ${activeSection === item.id ? 'text-blue-600 border-blue-600' : ''
+                    }`}
                 >
                   {item.name}
                 </a>

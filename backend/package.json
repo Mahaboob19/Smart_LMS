@@ -6,7 +6,8 @@
  
   "scripts": {
     "start": "node index.js",
-    "dev": "nodemon index.js"
+    "dev": "nodemon index.js",
+    "test": "node -e \"console.log('Testing server...'); require('./index.js');\""
   },
 
   "dependencies": {
