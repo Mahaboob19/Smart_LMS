@@ -4,17 +4,66 @@ import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import MinimalFooter from '../components/MinimalFooter';
 import { authAPI } from '../api/auth';
-
+import { librarianAPI } from '../api/librarian';
+import { hodAPI } from '../api/hod';
+import { studentAPI } from '../api/student';
 const DashboardPage = () => {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeSection, setActiveSection] = useState('dashboard');
+  const [showAddBookForm, setShowAddBookForm] = useState(false);
+  const [books, setBooks] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [newBook, setNewBook] = useState({
+    title: '',
+    author: '',
+    department: '',
+    totalCopies: '',
+    description: ''
+  });
+
+  // Transactions State
+  const [showIssueBookForm, setShowIssueBookForm] = useState(false);
+  const [transactions, setTransactions] = useState([]);
+  const [newTransaction, setNewTransaction] = useState({
+    bookId: '',
+    userId: '',
+    dueDate: ''
+  });
+
+  // Analytics & Messages State
+  const [analyticsStats, setAnalyticsStats] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [showMessageForm, setShowMessageForm] = useState(false);
+  const [newMessage, setNewMessage] = useState({
+    recipientRole: 'principal',
+    subject: '',
+    content: ''
+  });
+
+  // HOD State
+  const [hodAnalyticsStats, setHodAnalyticsStats] = useState(null);
+  const [recommendations, setRecommendations] = useState([]);
+  const [showAddRecommendationForm, setShowAddRecommendationForm] = useState(false);
+  const [newRecommendation, setNewRecommendation] = useState({
+    title: '',
+    author: '',
+    description: ''
+  });
+  const [bookRequests, setBookRequests] = useState([]);
+
+  // Student State
+  const [studentAnalyticsStats, setStudentAnalyticsStats] = useState(null);
+  const [showRequestBookModal, setShowRequestBookModal] = useState(false);
+  const [selectedBookForRequest, setSelectedBookForRequest] = useState(null);
+  const [requestReason, setRequestReason] = useState('');
 
   /* Navigation Arrays for Different Roles */
   const studentNavItems = [
     { name: 'Dashboard', id: 'dashboard' },
     { name: 'Books', id: 'books' },
+    { name: 'My Requests', id: 'my-requests' },
     { name: 'Recommendations', id: 'recommendations' },
     { name: 'My Analytics', id: 'analytics' }
   ];
@@ -84,6 +133,42 @@ const DashboardPage = () => {
     checkAuth();
   }, [navigate]);
 
+  useEffect(() => {
+    if (user?.userType === 'librarian') {
+      if (activeSection === 'books') {
+        fetchBooks();
+      } else if (activeSection === 'transactions') {
+        fetchTransactions();
+      } else if (activeSection === 'analytics') {
+        fetchAnalytics();
+      } else if (activeSection === 'messages') {
+        fetchMessages();
+      }
+    } else if (user?.userType === 'hod') {
+      if (activeSection === 'dashboard' || activeSection === 'analytics') {
+        fetchHodAnalytics();
+      }
+      if (activeSection === 'recommendations') {
+        fetchRecommendations();
+      } else if (activeSection === 'requests') {
+        fetchBookRequests();
+      } else if (activeSection === 'messages') {
+        fetchMessages();
+      }
+    } else if (user?.userType === 'student') {
+      if (activeSection === 'dashboard' || activeSection === 'analytics') {
+        fetchStudentAnalytics();
+      }
+      if (activeSection === 'books') {
+        fetchStudentBooks();
+      } else if (activeSection === 'recommendations') {
+        fetchStudentRecommendations();
+      } else if (activeSection === 'my-requests') {
+        fetchStudentRequests();
+      }
+    }
+  }, [activeSection, searchQuery, user]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50/30 flex items-center justify-center">
@@ -115,6 +200,227 @@ const DashboardPage = () => {
     }
   };
 
+  const handleAddBook = async (e) => {
+    e.preventDefault();
+    try {
+      const response = await librarianAPI.addBook({
+        ...newBook,
+        totalCopies: parseInt(newBook.totalCopies)
+      });
+      if (response.success) {
+        alert('Book added successfully!');
+        setNewBook({ title: '', author: '', department: '', totalCopies: '', description: '' });
+        setShowAddBookForm(false);
+        fetchBooks(); // Refresh books list
+      } else {
+        alert(response.message || 'Failed to add book');
+      }
+    } catch (error) {
+      alert('An error occurred while adding the book');
+    }
+  };
+
+  const fetchBooks = async () => {
+    try {
+      const response = await librarianAPI.getBooks(searchQuery);
+      if (response.success) {
+        setBooks(response.books);
+      }
+    } catch (error) {
+      console.error('Failed to fetch books', error);
+    }
+  };
+
+  const fetchTransactions = async () => {
+    try {
+      const response = await librarianAPI.getTransactions();
+      if (response.success) {
+        setTransactions(response.transactions);
+      }
+    } catch (error) {
+      console.error('Failed to fetch transactions', error);
+    }
+  };
+
+  const handleIssueBook = async (e) => {
+    e.preventDefault();
+    try {
+      const response = await librarianAPI.issueBook(newTransaction);
+      if (response.success) {
+        alert('Book issued successfully!');
+        setNewTransaction({ bookId: '', userId: '', dueDate: '' });
+        setShowIssueBookForm(false);
+        fetchTransactions();
+      } else {
+        alert(response.message || 'Failed to issue book');
+      }
+    } catch (error) {
+      alert('An error occurred while issuing the book');
+    }
+  };
+
+  const fetchAnalytics = async () => {
+    try {
+      const response = await librarianAPI.getAnalytics();
+      if (response.success) {
+        setAnalyticsStats(response.stats);
+      }
+    } catch (error) {
+      console.error('Failed to fetch analytics', error);
+    }
+  };
+
+  const fetchMessages = async () => {
+    try {
+      const response = await librarianAPI.getMessages();
+      if (response.success) {
+        setMessages(response.messages);
+      }
+    } catch (error) {
+      console.error('Failed to fetch messages', error);
+    }
+  };
+
+  const handleSendMessage = async (e) => {
+    e.preventDefault();
+    try {
+      const result = await hodAPI.sendMessage(newMessage);
+      if (result.success) {
+        alert('Message sent successfully!');
+        setShowMessageForm(false);
+        setNewMessage({ recipientRole: 'principal', subject: '', content: '' });
+        fetchMessages();
+      } else {
+        alert(result.message || 'Error sending message');
+      }
+    } catch (error) {
+      alert('An error occurred while sending the message');
+    }
+  };
+
+  const handleRequestBook = async (e) => {
+    e.preventDefault();
+    if (!selectedBookForRequest) return;
+
+    const result = await studentAPI.requestBook(selectedBookForRequest._id, requestReason);
+    if (result.success) {
+      alert('Book request submitted successfully!');
+      setShowRequestBookModal(false);
+      setSelectedBookForRequest(null);
+      setRequestReason('');
+    } else {
+      alert(result.message || 'Error submitting book request');
+    }
+  };
+
+  const fetchHodAnalytics = async () => {
+    try {
+      const response = await hodAPI.getAnalytics();
+      if (response.success) {
+        setHodAnalyticsStats(response.stats);
+      }
+    } catch (error) {
+      console.error('Failed to fetch HOD analytics', error);
+    }
+  };
+
+  const fetchRecommendations = async () => {
+    try {
+      const response = await hodAPI.getRecommendations();
+      if (response.success) {
+        setRecommendations(response.recommendations);
+      }
+    } catch (error) {
+      console.error('Failed to fetch recommendations', error);
+    }
+  };
+
+  const handleAddRecommendation = async (e) => {
+    e.preventDefault();
+    try {
+      const response = await hodAPI.addRecommendation(newRecommendation);
+      if (response.success) {
+        alert('Recommendation added successfully!');
+        setNewRecommendation({ title: '', author: '', description: '' });
+        setShowAddRecommendationForm(false);
+        fetchRecommendations();
+      } else {
+        alert(response.message || 'Failed to add recommendation');
+      }
+    } catch (error) {
+      alert('An error occurred while adding the recommendation');
+    }
+  };
+
+  const fetchBookRequests = async () => {
+    try {
+      const response = await hodAPI.getRequests();
+      if (response.success) {
+        setBookRequests(response.requests);
+      }
+    } catch (error) {
+      console.error('Failed to fetch book requests', error);
+    }
+  };
+
+  const handleUpdateRequestStatus = async (requestId, status) => {
+    try {
+      const response = await hodAPI.updateRequestStatus(requestId, status);
+      if (response.success) {
+        alert(`Request ${status.toLowerCase()} successfully!`);
+        fetchBookRequests();
+      } else {
+        alert(response.message || 'Failed to update request');
+      }
+    } catch (error) {
+      alert('An error occurred while updating the request');
+    }
+  };
+
+  const fetchStudentAnalytics = async () => {
+    try {
+      const response = await studentAPI.getAnalytics();
+      if (response.success) {
+        setStudentAnalyticsStats(response.stats);
+      }
+    } catch (error) {
+      console.error('Failed to fetch student analytics', error);
+    }
+  };
+
+  const fetchStudentBooks = async () => {
+    try {
+      const response = await studentAPI.getBooks(searchQuery);
+      if (response.success) {
+        setBooks(response.books);
+      }
+    } catch (error) {
+      console.error('Failed to fetch student books', error);
+    }
+  };
+
+  const fetchStudentRecommendations = async () => {
+    try {
+      const response = await studentAPI.getRecommendations();
+      if (response.success) {
+        setRecommendations(response.recommendations);
+      }
+    } catch (error) {
+      console.error('Failed to fetch student recommendations', error);
+    }
+  };
+
+  const fetchStudentRequests = async () => {
+    try {
+      const response = await studentAPI.getRequests();
+      if (response.success) {
+        setBookRequests(response.requests);
+      }
+    } catch (error) {
+      console.error('Failed to fetch student requests', error);
+    }
+  };
+
   const getUserTypeLabel = () => {
     const typeMap = {
       student: 'Student',
@@ -127,194 +433,774 @@ const DashboardPage = () => {
     return typeMap[user.userType] || user.userType;
   };
 
-  const renderDashboard = () => (
-    <div className="max-w-6xl mx-auto">
-      {/* Welcome Section */}
-      <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100 mb-8">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">
-              Welcome back, {user.firstName}!
-            </h1>
+  const renderDashboard = () => {
+    if (user.userType === 'student') {
+      return (
+        <div className="max-w-6xl mx-auto">
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-8">Student Dashboard</h2>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+                <h4 className="text-sm font-medium text-gray-500 mb-2">Currently Issued</h4>
+                <span className="text-3xl font-bold text-gray-900">{studentAnalyticsStats?.currentlyIssued || 0}</span>
+              </div>
+              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+                <h4 className="text-sm font-medium text-gray-500 mb-2">Overdue Books</h4>
+                <span className="text-3xl font-bold text-red-600">{studentAnalyticsStats?.overdue || 0}</span>
+              </div>
+              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+                <h4 className="text-sm font-medium text-gray-500 mb-2">Total Fine</h4>
+                <span className="text-3xl font-bold text-gray-900">${studentAnalyticsStats?.totalFine || 0}</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div onClick={() => setActiveSection('books')} className="bg-gray-50 rounded-lg p-6 border border-gray-100 cursor-pointer hover:shadow-sm transition-shadow">
+                <h4 className="text-lg font-medium text-gray-900 mb-1">Browse Books</h4>
+                <p className="text-gray-500 text-sm">Search and browse available books</p>
+              </div>
+              <div onClick={() => setActiveSection('recommendations')} className="bg-gray-50 rounded-lg p-6 border border-gray-100 cursor-pointer hover:shadow-sm transition-shadow">
+                <h4 className="text-lg font-medium text-gray-900 mb-1">Recommendations</h4>
+                <p className="text-gray-500 text-sm">View recommended books</p>
+              </div>
+              <div onClick={() => setActiveSection('analytics')} className="bg-gray-50 rounded-lg p-6 border border-gray-100 cursor-pointer hover:shadow-sm transition-shadow">
+                <h4 className="text-lg font-medium text-gray-900 mb-1">My Analytics</h4>
+                <p className="text-gray-500 text-sm">View your library usage statistics</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="max-w-6xl mx-auto">
+        {/* Welcome Section */}
+        <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100 mb-8">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">
+                Welcome back, {user.firstName}!
+              </h1>
+              <p className="text-gray-600">
+                {getUserTypeLabel()} Dashboard
+              </p>
+            </div>
+            <div className="text-right">
+              {(user.userType === 'student' || user.userType === 'staff') && (
+                <>
+                  <div className="text-sm text-gray-500">Library Card</div>
+                  <div className="text-lg font-semibold text-blue-600">
+                    {user.libraryCardNumber || 'N/A'}
+                  </div>
+                </>
+              )}
+              {/* Show something else for admins if needed, or nothing */}
+              {['admin', 'librarian', 'principal', 'hod'].includes(user.userType) && (
+                <div className="px-4 py-2 bg-blue-50 text-blue-700 rounded-lg font-medium text-sm">
+                  {getUserTypeLabel()} Access
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* User Info Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+          <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Personal Information</h3>
+              <svg className="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+            </div>
+            <div className="space-y-2 text-sm">
+              <div>
+                <span className="text-gray-500">Name:</span>
+                <span className="ml-2 font-medium text-gray-900">
+                  {user.firstName} {user.lastName}
+                </span>
+              </div>
+              <div>
+                <span className="text-gray-500">Email:</span>
+                <span className="ml-2 font-medium text-gray-900">{user.email}</span>
+              </div>
+              {user.rollNumber && (
+                <div>
+                  <span className="text-gray-500">Roll Number:</span>
+                  <span className="ml-2 font-medium text-gray-900">{user.rollNumber}</span>
+                </div>
+              )}
+              {user.staffId && (
+                <div>
+                  <span className="text-gray-500">Staff ID:</span>
+                  <span className="ml-2 font-medium text-gray-900">{user.staffId}</span>
+                </div>
+              )}
+              {user.department && (
+                <div>
+                  <span className="text-gray-500">Department:</span>
+                  <span className="ml-2 font-medium text-gray-900">{user.department}</span>
+                </div>
+              )}
+              {user.year && (
+                <div>
+                  <span className="text-gray-500">Year:</span>
+                  <span className="ml-2 font-medium text-gray-900">{user.year}</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Account Type</h3>
+              <svg className="h-6 w-6 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+              </svg>
+            </div>
+            <div className="text-center">
+              <div className="text-3xl font-bold text-blue-600 mb-2">
+                {getUserTypeLabel()}
+              </div>
+              <div className="text-sm text-gray-500">
+                {user.userType === 'student' || user.userType === 'staff'
+                  ? 'Regular User'
+                  : 'Administrative Access'}
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Quick Actions</h3>
+              <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+            </div>
+            <div className="space-y-2">
+              {(user.userType === 'student' || user.userType === 'staff' || user.userType === 'librarian' || user.userType === 'admin') && (
+                <button
+                  onClick={() => setActiveSection('books')}
+                  className="w-full text-left px-4 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors text-sm font-medium"
+                >
+                  Browse Books
+                </button>
+              )}
+
+              {(user.userType === 'admin' || user.userType === 'principal') && (
+                <button
+                  onClick={() => navigate('/admin/management')}
+                  className="w-full text-left px-4 py-2 bg-orange-50 text-orange-700 rounded-lg hover:bg-orange-100 transition-colors text-sm font-medium"
+                >
+                  Admin Management
+                </button>
+              )}
+
+              <button className="w-full text-left px-4 py-2 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors text-sm font-medium">
+                View Profile
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Librarian Dashboard Specific Layout */}
+        {user.userType === 'librarian' && (
+          <div className="mt-8 space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              {/* Total Books */}
+              <div className="bg-gray-100 rounded-lg p-6 flex flex-col items-start border border-gray-200">
+                <div className="flex items-center space-x-2 text-gray-500 mb-2">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
+                  <span className="text-sm font-medium">Total Books</span>
+                </div>
+                <span className="text-2xl font-bold text-gray-900">0</span>
+              </div>
+
+              {/* Issued Books */}
+              <div className="bg-gray-100 rounded-lg p-6 flex flex-col items-start border border-gray-200">
+                <div className="flex items-center space-x-2 text-gray-500 mb-2">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                  <span className="text-sm font-medium">Issued Books</span>
+                </div>
+                <span className="text-2xl font-bold text-gray-900">0</span>
+              </div>
+
+              {/* Student Issues */}
+              <div className="bg-gray-100 rounded-lg p-6 flex flex-col items-start border border-gray-200">
+                <div className="flex items-center space-x-2 text-gray-500 mb-2">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+                  <span className="text-sm font-medium">Student Issues</span>
+                </div>
+                <span className="text-2xl font-bold text-gray-900">0</span>
+              </div>
+
+              {/* Staff Issues */}
+              <div className="bg-gray-100 rounded-lg p-6 flex flex-col items-start border border-gray-200">
+                <div className="flex items-center space-x-2 text-gray-500 mb-2">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+                  <span className="text-sm font-medium">Staff Issues</span>
+                </div>
+                <span className="text-2xl font-bold text-gray-900">0</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Manage Books Action */}
+              <div onClick={() => setActiveSection('books')} className="bg-white rounded-lg p-6 shadow-sm border border-gray-200 cursor-pointer hover:shadow-md transition-shadow">
+                <h4 className="text-lg font-bold text-gray-900 mb-1">Manage Books</h4>
+                <p className="text-gray-500 text-sm">Add, update, and manage library books</p>
+              </div>
+
+              {/* Transactions Action */}
+              <div onClick={() => setActiveSection('transactions')} className="bg-white rounded-lg p-6 shadow-sm border border-gray-200 cursor-pointer hover:shadow-md transition-shadow">
+                <h4 className="text-lg font-bold text-gray-900 mb-1">Transactions</h4>
+                <p className="text-gray-500 text-sm">Issue and return books</p>
+              </div>
+
+              {/* Analytics Action */}
+              <div onClick={() => setActiveSection('analytics')} className="bg-white rounded-lg p-6 shadow-sm border border-gray-200 cursor-pointer hover:shadow-md transition-shadow">
+                <h4 className="text-lg font-bold text-gray-900 mb-1">Analytics</h4>
+                <p className="text-gray-500 text-sm">View library usage statistics</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* HOD Dashboard Specific Layout */}
+        {user.userType === 'hod' && (
+          <div className="mt-8 space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
+                <h4 className="text-sm font-medium text-gray-500 mb-2">Department Students</h4>
+                <span className="text-3xl font-bold text-gray-900">{hodAnalyticsStats?.studentCount || 0}</span>
+              </div>
+              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
+                <h4 className="text-sm font-medium text-gray-500 mb-2">Total Transactions</h4>
+                <span className="text-3xl font-bold text-gray-900">{hodAnalyticsStats?.totalTransactions || 0}</span>
+              </div>
+              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
+                <h4 className="text-sm font-medium text-gray-500 mb-2">Pending Requests</h4>
+                <span className="text-3xl font-bold text-gray-900">{bookRequests?.filter(r => r.status === 'Pending').length || 0}</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div onClick={() => setActiveSection('recommendations')} className="bg-white rounded-lg p-6 shadow-sm border border-gray-200 cursor-pointer hover:shadow-md transition-shadow">
+                <h4 className="text-lg font-bold text-gray-900 mb-1">Recommendations</h4>
+                <p className="text-gray-500 text-sm">Recommend books for department students</p>
+              </div>
+              <div onClick={() => setActiveSection('analytics')} className="bg-white rounded-lg p-6 shadow-sm border border-gray-200 cursor-pointer hover:shadow-md transition-shadow">
+                <h4 className="text-lg font-bold text-gray-900 mb-1">Analytics</h4>
+                <p className="text-gray-500 text-sm">View department analytics</p>
+              </div>
+              <div onClick={() => setActiveSection('requests')} className="bg-white rounded-lg p-6 shadow-sm border border-gray-200 cursor-pointer hover:shadow-md transition-shadow">
+                <h4 className="text-lg font-bold text-gray-900 mb-1">Staff Requests</h4>
+                <p className="text-gray-500 text-sm">Approve staff book requests</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Placeholder for future features for other roles */}
+        {!['librarian', 'hod', 'student'].includes(user.userType) && (
+          <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100 mt-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">Dashboard Overview</h2>
             <p className="text-gray-600">
-              {getUserTypeLabel()} Dashboard
+              Welcome to your personalized dashboard. Use the navigation menu to access different sections.
             </p>
           </div>
-          <div className="text-right">
-            {(user.userType === 'student' || user.userType === 'staff') && (
-              <>
-                <div className="text-sm text-gray-500">Library Card</div>
-                <div className="text-lg font-semibold text-blue-600">
-                  {user.libraryCardNumber || 'N/A'}
-                </div>
-              </>
-            )}
-            {/* Show something else for admins if needed, or nothing */}
-            {['admin', 'librarian', 'principal', 'hod'].includes(user.userType) && (
-              <div className="px-4 py-2 bg-blue-50 text-blue-700 rounded-lg font-medium text-sm">
-                {getUserTypeLabel()} Access
-              </div>
-            )}
-          </div>
-        </div>
+        )}
       </div>
-
-      {/* User Info Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-        <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900">Personal Information</h3>
-            <svg className="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-            </svg>
-          </div>
-          <div className="space-y-2 text-sm">
-            <div>
-              <span className="text-gray-500">Name:</span>
-              <span className="ml-2 font-medium text-gray-900">
-                {user.firstName} {user.lastName}
-              </span>
-            </div>
-            <div>
-              <span className="text-gray-500">Email:</span>
-              <span className="ml-2 font-medium text-gray-900">{user.email}</span>
-            </div>
-            {user.rollNumber && (
-              <div>
-                <span className="text-gray-500">Roll Number:</span>
-                <span className="ml-2 font-medium text-gray-900">{user.rollNumber}</span>
-              </div>
-            )}
-            {user.staffId && (
-              <div>
-                <span className="text-gray-500">Staff ID:</span>
-                <span className="ml-2 font-medium text-gray-900">{user.staffId}</span>
-              </div>
-            )}
-            {user.department && (
-              <div>
-                <span className="text-gray-500">Department:</span>
-                <span className="ml-2 font-medium text-gray-900">{user.department}</span>
-              </div>
-            )}
-            {user.year && (
-              <div>
-                <span className="text-gray-500">Year:</span>
-                <span className="ml-2 font-medium text-gray-900">{user.year}</span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900">Account Type</h3>
-            <svg className="h-6 w-6 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-            </svg>
-          </div>
-          <div className="text-center">
-            <div className="text-3xl font-bold text-blue-600 mb-2">
-              {getUserTypeLabel()}
-            </div>
-            <div className="text-sm text-gray-500">
-              {user.userType === 'student' || user.userType === 'staff'
-                ? 'Regular User'
-                : 'Administrative Access'}
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900">Quick Actions</h3>
-            <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
-          </div>
-          <div className="space-y-2">
-            {(user.userType === 'student' || user.userType === 'staff' || user.userType === 'librarian' || user.userType === 'admin') && (
-              <button
-                onClick={() => setActiveSection('books')}
-                className="w-full text-left px-4 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors text-sm font-medium"
-              >
-                Browse Books
-              </button>
-            )}
-
-            {(user.userType === 'admin' || user.userType === 'principal') && (
-              <button
-                onClick={() => navigate('/admin/management')}
-                className="w-full text-left px-4 py-2 bg-orange-50 text-orange-700 rounded-lg hover:bg-orange-100 transition-colors text-sm font-medium"
-              >
-                Admin Management
-              </button>
-            )}
-
-            <button className="w-full text-left px-4 py-2 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors text-sm font-medium">
-              View Profile
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Placeholder for future features */}
-      <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
-        <h2 className="text-2xl font-bold text-gray-900 mb-4">Dashboard Overview</h2>
-        <p className="text-gray-600">
-          Welcome to your personalized dashboard. Use the navigation menu to access different sections.
-        </p>
-      </div>
-    </div>
-  );
+    );
+  };
 
   const renderBooks = () => (
     <div className="max-w-6xl mx-auto">
-      <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
-        <h2 className="text-2xl font-bold text-gray-900 mb-4">Books Library</h2>
-        <p className="text-gray-600">Browse and search for books here.</p>
-        <div className="mt-8 flex items-center justify-center h-64 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
-          <p className="text-gray-500">Book browsing interface coming soon...</p>
-        </div>
+      <div className="bg-gray-50 rounded-xl p-6 border border-gray-100">
+        {!showAddBookForm ? (
+          <>
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-gray-800">
+                {user.userType === 'student' ? 'Browse Books' : 'Books Management'}
+              </h3>
+              {user.userType !== 'student' && (
+                <button
+                  onClick={() => setShowAddBookForm(true)}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors"
+                >
+                  Add Book
+                </button>
+              )}
+            </div>
+            <div className="mb-6">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={user.userType === 'student' ? 'Search books by title, author, or ISBN...' : 'Search books by title...'}
+                className="w-full px-4 py-3 rounded-lg border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+              />
+            </div>
+
+            {/* Books Table */}
+            <div className="bg-white rounded-lg border border-gray-200 overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Author</th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Department</th>
+                    <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Available / Total</th>
+                    {user.userType === 'student' && (
+                      <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
+                    )}
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {books.length > 0 ? (
+                    books.map((book) => (
+                      <tr key={book._id}>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm font-medium text-gray-900">{book.title}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-500">{book.author}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+                            {book.department}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                          <span className={`${book.availableCopies === 0 ? 'text-red-600' : 'text-green-600'}`}>
+                            {book.availableCopies}
+                          </span>
+                          <span className="text-gray-500"> / {book.totalCopies}</span>
+                        </td>
+                        {user.userType === 'student' && (
+                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            <button
+                              onClick={() => {
+                                setSelectedBookForRequest(book);
+                                setShowRequestBookModal(true);
+                              }}
+                              className="text-blue-600 hover:text-blue-900 bg-blue-50 px-3 py-1 rounded-md transition-colors"
+                            >
+                              Request
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan="4" className="px-6 py-8 text-center text-sm text-gray-500">
+                        No books found. Try adjusting your search or add a new book.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </>
+        ) : (
+          <div className="bg-white p-6 rounded-lg border border-gray-200">
+            <h3 className="text-xl font-semibold text-gray-800 mb-6 border-b pb-2">Add New Book</h3>
+            <form className="space-y-4" onSubmit={handleAddBook}>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
+                  <input
+                    type="text"
+                    value={newBook.title}
+                    onChange={(e) => setNewBook({ ...newBook, title: e.target.value })}
+                    className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Book Title"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Author</label>
+                  <input
+                    type="text"
+                    value={newBook.author}
+                    onChange={(e) => setNewBook({ ...newBook, author: e.target.value })}
+                    className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Author Name"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
+                  <select
+                    value={newBook.department}
+                    onChange={(e) => setNewBook({ ...newBook, department: e.target.value })}
+                    className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  >
+                    <option value="">Select Department</option>
+                    <option value="CSE">Computer Science</option>
+                    <option value="ECE">Electronics</option>
+                    <option value="ME">Mechanical</option>
+                    <option value="CE">Civil</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Total Copies</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={newBook.totalCopies}
+                    onChange={(e) => setNewBook({ ...newBook, totalCopies: e.target.value })}
+                    className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Number of copies"
+                    required
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                <textarea
+                  rows="3"
+                  value={newBook.description}
+                  onChange={(e) => setNewBook({ ...newBook, description: e.target.value })}
+                  className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Book description..."
+                  required
+                ></textarea>
+              </div>
+              <div className="flex justify-end space-x-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowAddBookForm(false)}
+                  className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors"
+                >
+                  Add Book
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {/* Request Book Modal */}
+        {showRequestBookModal && selectedBookForRequest && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-xl shadow-xl p-8 max-w-md w-full mx-4 relative">
+              <button
+                onClick={() => {
+                  setShowRequestBookModal(false);
+                  setSelectedBookForRequest(null);
+                  setRequestReason('');
+                }}
+                className="absolute p-2 top-4 right-4 text-gray-400 hover:text-gray-600"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+              </button>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">Request Book</h3>
+              <p className="text-gray-500 text-sm mb-6">
+                You are requesting <span className="font-semibold text-gray-800">{selectedBookForRequest.title}</span>.
+              </p>
+
+              <form onSubmit={handleRequestBook} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Reason for request</label>
+                  <textarea
+                    rows="3"
+                    value={requestReason}
+                    onChange={(e) => setRequestReason(e.target.value)}
+                    className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Why do you need this book?"
+                    required
+                  ></textarea>
+                </div>
+                <div className="flex justify-end space-x-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowRequestBookModal(false);
+                      setSelectedBookForRequest(null);
+                      setRequestReason('');
+                    }}
+                    className="px-5 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors"
+                  >
+                    Submit Request
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
 
   const renderRecommendations = () => (
     <div className="max-w-6xl mx-auto">
-      <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
-        <h2 className="text-2xl font-bold text-gray-900 mb-4">Recommended For You</h2>
-        <p className="text-gray-600">Books tailored to your interests and course.</p>
-        <div className="mt-8 flex items-center justify-center h-64 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
-          <p className="text-gray-500">Recommendations engine coming soon...</p>
-        </div>
+      <div className="bg-gray-50 rounded-xl p-6 border border-gray-100">
+        {!showAddRecommendationForm ? (
+          <>
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-gray-800">
+                {user.userType === 'student' ? 'Recommended Books' : 'Book Recommendations'}
+              </h3>
+              {user.userType === 'hod' && (
+                <button
+                  onClick={() => setShowAddRecommendationForm(true)}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors"
+                >
+                  Add Recommendation
+                </button>
+              )}
+            </div>
+
+            <div className="bg-white rounded-lg border border-gray-200 overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Book Title</th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Author</th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Recommended By</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {recommendations.length > 0 ? (
+                    recommendations.map((rec) => (
+                      <tr key={rec._id}>
+                        <td className="px-6 py-4 text-sm font-medium text-gray-900">{rec.title}</td>
+                        <td className="px-6 py-4 text-sm text-gray-500">{rec.author}</td>
+                        <td className="px-6 py-4 text-sm text-gray-500">{rec.description || '-'}</td>
+                        <td className="px-6 py-4 text-sm text-gray-500">{rec.recommendedBy?.firstName} {rec.recommendedBy?.lastName}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan="4" className="px-6 py-8 text-center text-sm text-gray-500 bg-gray-50 rounded-lg mt-4">
+                        {user.userType === 'student' ? 'No recommendations available' : 'No recommendations found.'}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </>
+        ) : (
+          <div className="bg-white p-6 rounded-lg border border-gray-200">
+            <h3 className="text-xl font-semibold text-gray-800 mb-6 border-b pb-2">Add Recommendation</h3>
+            <form className="space-y-4" onSubmit={handleAddRecommendation}>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Book Title</label>
+                  <input
+                    type="text"
+                    value={newRecommendation.title}
+                    onChange={(e) => setNewRecommendation({ ...newRecommendation, title: e.target.value })}
+                    className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Author</label>
+                  <input
+                    type="text"
+                    value={newRecommendation.author}
+                    onChange={(e) => setNewRecommendation({ ...newRecommendation, author: e.target.value })}
+                    className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Description (Optional)</label>
+                <textarea
+                  rows="3"
+                  value={newRecommendation.description}
+                  onChange={(e) => setNewRecommendation({ ...newRecommendation, description: e.target.value })}
+                  className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                ></textarea>
+              </div>
+              <div className="flex justify-end space-x-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowAddRecommendationForm(false)}
+                  className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors"
+                >
+                  Add Recommendation
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
       </div>
     </div>
   );
 
-  const renderAnalytics = () => (
-    <div className="max-w-6xl mx-auto">
-      <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
-        <h2 className="text-2xl font-bold text-gray-900 mb-4">Analytics & Stats</h2>
-        <p className="text-gray-600">
-          {['student', 'staff'].includes(user.userType)
-            ? "Track your reading habits and library activity."
-            : "View library usage statistics and reports."}
-        </p>
-        <div className="mt-8 flex items-center justify-center h-64 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
-          <p className="text-gray-500">Analytics charts coming soon...</p>
+  const renderAnalytics = () => {
+    if (user.userType === 'student') {
+      return (
+        <div className="max-w-6xl mx-auto">
+          <div className="mb-6">
+            <h3 className="text-xl font-bold text-gray-900 mb-6">My Library Analytics</h3>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+                <h4 className="text-sm font-medium text-gray-500 mb-2">Total Books issued</h4>
+                <span className="text-3xl font-bold text-gray-900">{studentAnalyticsStats?.totalIssued || 0}</span>
+              </div>
+              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+                <h4 className="text-sm font-medium text-gray-500 mb-2">Currently Issued</h4>
+                <span className="text-3xl font-bold text-gray-900">{studentAnalyticsStats?.currentlyIssued || 0}</span>
+              </div>
+              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+                <h4 className="text-sm font-medium text-gray-500 mb-2">Overdue</h4>
+                <span className="text-3xl font-bold text-red-600">{studentAnalyticsStats?.overdue || 0}</span>
+              </div>
+              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+                <h4 className="text-sm font-medium text-gray-500 mb-2">Total Fine</h4>
+                <span className="text-3xl font-bold text-gray-900">${studentAnalyticsStats?.totalFine || 0}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (user.userType === 'hod') {
+      if (!hodAnalyticsStats) return <div className="text-center py-10">Loading analytics...</div>;
+      return (
+        <div className="max-w-6xl mx-auto">
+          <div className="bg-white rounded-xl p-8 border border-gray-100 shadow-sm">
+            <h3 className="text-xl font-semibold text-gray-800 mb-6 border-b pb-2">Department Analytics</h3>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              <div className="bg-gray-50 rounded-xl shadow-sm p-6 border border-gray-200">
+                <h4 className="text-sm font-medium text-gray-500 mb-2">Department</h4>
+                <span className="text-xl font-bold text-gray-900">{hodAnalyticsStats.department}</span>
+              </div>
+              <div className="bg-gray-50 rounded-xl shadow-sm p-6 border border-gray-200">
+                <h4 className="text-sm font-medium text-gray-500 mb-2">Total Students</h4>
+                <span className="text-xl font-bold text-gray-900">{hodAnalyticsStats.studentCount}</span>
+              </div>
+              <div className="bg-gray-50 rounded-xl shadow-sm p-6 border border-gray-200">
+                <h4 className="text-sm font-medium text-gray-500 mb-2">Total Transactions</h4>
+                <span className="text-xl font-bold text-gray-900">{hodAnalyticsStats.totalTransactions}</span>
+              </div>
+              <div className="bg-gray-50 rounded-xl shadow-sm p-6 border border-gray-200">
+                <h4 className="text-sm font-medium text-gray-500 mb-2">Active Issues</h4>
+                <span className="text-xl font-bold text-gray-900">{hodAnalyticsStats.activeIssues}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (!analyticsStats) return <div className="text-center py-10">Loading analytics...</div>;
+
+    return (
+      <div className="max-w-6xl mx-auto">
+        <div className="mb-8">
+          <h3 className="text-xl font-semibold text-gray-800 mb-4">Library Analytics</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
+              <h4 className="text-sm font-medium text-gray-500 mb-2">Total Books (Titles)</h4>
+              <span className="text-3xl font-bold text-gray-900">{analyticsStats.totalTitles || 0}</span>
+            </div>
+            <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
+              <h4 className="text-sm font-medium text-gray-500 mb-2">Total Copies</h4>
+              <span className="text-3xl font-bold text-gray-900">{analyticsStats.totalCopies || 0}</span>
+            </div>
+            <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
+              <h4 className="text-sm font-medium text-gray-500 mb-2">Available Copies</h4>
+              <span className="text-3xl font-bold text-green-600">{analyticsStats.availableCopies || 0}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+          <div className="bg-gray-50 rounded-xl p-6 border border-gray-200">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">Student Statistics</h3>
+            <div className="space-y-2 text-sm text-gray-600">
+              <p>Active Issues: {analyticsStats.studentIssuesCount || 0}</p>
+            </div>
+          </div>
+          <div className="bg-gray-50 rounded-xl p-6 border border-gray-200">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">Staff Statistics</h3>
+            <div className="space-y-2 text-sm text-gray-600">
+              <p>Active Issues: {analyticsStats.staffIssuesCount || 0}</p>
+            </div>
+          </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderMyRequests = () => (
     <div className="max-w-6xl mx-auto">
-      <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
-        <h2 className="text-2xl font-bold text-gray-900 mb-4">My Requests</h2>
-        <p className="text-gray-600">Status of your book requests.</p>
-        <div className="mt-8 flex items-center justify-center h-64 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
-          <p className="text-gray-500">Requests list coming soon...</p>
+      <div className="bg-white rounded-xl p-8 border border-gray-100 shadow-sm">
+        <h3 className="text-xl font-semibold text-gray-800 mb-6 border-b pb-2">My Book Requests</h3>
+
+        <div className="bg-white rounded-lg border border-gray-200 overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Book</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Reason</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Requested On</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {bookRequests.length > 0 ? (
+                bookRequests.map((req) => (
+                  <tr key={req._id}>
+                    <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                      {req.book ? req.book.title : req.title}
+                      {req.author && <span className="text-xs text-gray-500 block">by {req.author}</span>}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate" title={req.reason}>
+                      {req.reason}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
+                        ${req.status === 'Approved' ? 'bg-green-100 text-green-800' :
+                          req.status === 'Rejected' ? 'bg-red-100 text-red-800' :
+                            'bg-yellow-100 text-yellow-800'}`}>
+                        {req.status}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {new Date(req.requestedAt).toLocaleDateString()}
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="4" className="px-6 py-8 text-center text-sm text-gray-500">
+                    You have not made any book requests.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -322,11 +1208,74 @@ const DashboardPage = () => {
 
   const renderRequests = () => (
     <div className="max-w-6xl mx-auto">
-      <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
-        <h2 className="text-2xl font-bold text-gray-900 mb-4">Pending Requests</h2>
-        <p className="text-gray-600">Approve or reject book requests from students/staff.</p>
-        <div className="mt-8 flex items-center justify-center h-64 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
-          <p className="text-gray-500">Request approval interface coming soon...</p>
+      <div className="bg-white rounded-xl p-8 border border-gray-100 shadow-sm">
+        <h3 className="text-xl font-semibold text-gray-800 mb-6 border-b pb-2">Book Requests</h3>
+
+        <div className="bg-white rounded-lg border border-gray-200 overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Book</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Requested By</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Reason</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {bookRequests.length > 0 ? (
+                bookRequests.map((req) => (
+                  <tr key={req._id}>
+                    <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                      {req.book ? req.book.title : req.title}
+                      {req.author && <span className="text-xs text-gray-500 block">by {req.author}</span>}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-500">
+                      {req.user?.firstName} {req.user?.lastName}
+                      <span className="block text-xs">{req.user?.staffId}</span>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate" title={req.reason}>
+                      {req.reason}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
+                        ${req.status === 'Approved' ? 'bg-green-100 text-green-800' :
+                          req.status === 'Rejected' ? 'bg-red-100 text-red-800' :
+                            'bg-yellow-100 text-yellow-800'}`}>
+                        {req.status}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      {req.status === 'Pending' && (
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={() => handleUpdateRequestStatus(req._id, 'Approved')}
+                            className="text-green-600 hover:text-green-900 bg-green-50 p-1 rounded"
+                            title="Approve"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
+                          </button>
+                          <button
+                            onClick={() => handleUpdateRequestStatus(req._id, 'Rejected')}
+                            className="text-red-600 hover:text-red-900 bg-red-50 p-1 rounded"
+                            title="Reject"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="5" className="px-6 py-8 text-center text-sm text-gray-500">
+                    No requests found.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -334,24 +1283,216 @@ const DashboardPage = () => {
 
   const renderTransactions = () => (
     <div className="max-w-6xl mx-auto">
-      <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
-        <h2 className="text-2xl font-bold text-gray-900 mb-4">Transactions</h2>
-        <p className="text-gray-600">View and manage book issues and returns.</p>
-        <div className="mt-8 flex items-center justify-center h-64 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
-          <p className="text-gray-500">Transaction log coming soon...</p>
-        </div>
+      <div className="bg-gray-50 rounded-xl p-6 border border-gray-100">
+        {!showIssueBookForm ? (
+          <>
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-semibold text-gray-800">Transactions</h3>
+              <button
+                onClick={() => setShowIssueBookForm(true)}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors"
+              >
+                Issue Book
+              </button>
+            </div>
+
+            <div className="bg-white rounded-lg border border-gray-200 overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">BOOK</th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">USER ID</th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ISSUED DATE</th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">DUE DATE</th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">STATUS</th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">FINE</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {transactions.length > 0 ? (
+                    transactions.map((tx) => (
+                      <tr key={tx._id}>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{tx.book?.title}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{tx.user?.libraryCardNumber}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(tx.issuedDate).toLocaleDateString()}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(tx.dueDate).toLocaleDateString()}</td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${tx.status === 'Returned' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                            {tx.status}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${tx.fine}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan="6" className="px-6 py-8 text-center text-sm text-gray-500">
+                        No transactions found.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </>
+        ) : (
+          <div className="bg-white p-6 rounded-lg border border-gray-200">
+            <h3 className="text-xl font-semibold text-gray-800 mb-6 border-b pb-2">Issue Book</h3>
+            <form className="space-y-4" onSubmit={handleIssueBook}>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Book ID</label>
+                  <input
+                    type="text"
+                    value={newTransaction.bookId}
+                    onChange={(e) => setNewTransaction({ ...newTransaction, bookId: e.target.value })}
+                    className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="MongoDB Book ID"
+                    required
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Temporary: Please enter the exact MongoDB Object ID of the book</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">User ID</label>
+                  <input
+                    type="text"
+                    value={newTransaction.userId}
+                    onChange={(e) => setNewTransaction({ ...newTransaction, userId: e.target.value })}
+                    className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="MongoDB User ID"
+                    required
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Temporary: Please enter the exact MongoDB Object ID of the user</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Due Date</label>
+                  <input
+                    type="date"
+                    value={newTransaction.dueDate}
+                    onChange={(e) => setNewTransaction({ ...newTransaction, dueDate: e.target.value })}
+                    className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end space-x-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowIssueBookForm(false)}
+                  className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors"
+                >
+                  Issue
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
       </div>
     </div>
   );
 
   const renderMessages = () => (
     <div className="max-w-6xl mx-auto">
-      <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
-        <h2 className="text-2xl font-bold text-gray-900 mb-4">Messages</h2>
-        <p className="text-gray-600">Calculated fines, notifications, and communications.</p>
-        <div className="mt-8 flex items-center justify-center h-64 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
-          <p className="text-gray-500">Messages interface coming soon...</p>
-        </div>
+      <div className="bg-gray-50 rounded-xl p-6 border border-gray-100">
+        {!showMessageForm ? (
+          <>
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-semibold text-gray-800">Messages</h3>
+              <button
+                onClick={() => setShowMessageForm(true)}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors"
+              >
+                Send Message
+              </button>
+            </div>
+
+            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+              {messages.length > 0 ? (
+                <ul className="divide-y divide-gray-200">
+                  {messages.map((msg) => (
+                    <li key={msg._id} className="p-4 hover:bg-gray-50">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">{msg.subject}</p>
+                          <p className="text-sm text-gray-500 mt-1">{msg.content}</p>
+                        </div>
+                        <div className="text-xs text-gray-500 whitespace-nowrap ml-4">
+                          {new Date(msg.createdAt).toLocaleDateString()}
+                        </div>
+                      </div>
+                      <div className="mt-2 text-xs text-blue-600">
+                        To: {msg.recipientRole.toUpperCase()} | From: {msg.sender?.firstName} {msg.sender?.lastName}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="p-6 text-center text-gray-500">No messages found.</p>
+              )}
+            </div>
+          </>
+        ) : (
+          <div className="bg-white p-6 rounded-lg border border-gray-200">
+            <h3 className="text-xl font-semibold text-gray-800 mb-6 border-b pb-2">Send Message</h3>
+            <form className="space-y-4" onSubmit={handleSendMessage}>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">To (Role)</label>
+                <select
+                  value={newMessage.recipientRole}
+                  onChange={(e) => setNewMessage({ ...newMessage, recipientRole: e.target.value })}
+                  className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="principal">Principal</option>
+                  <option value="hod">HOD</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Subject</label>
+                <input
+                  type="text"
+                  value={newMessage.subject}
+                  onChange={(e) => setNewMessage({ ...newMessage, subject: e.target.value })}
+                  className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Message subject"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Content</label>
+                <textarea
+                  rows="4"
+                  value={newMessage.content}
+                  onChange={(e) => setNewMessage({ ...newMessage, content: e.target.value })}
+                  className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Type your message here..."
+                  required
+                ></textarea>
+              </div>
+              <div className="flex justify-end space-x-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowMessageForm(false)}
+                  className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors"
+                >
+                  Send
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
       </div>
     </div>
   );
