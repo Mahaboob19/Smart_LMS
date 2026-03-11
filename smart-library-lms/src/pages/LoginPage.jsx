@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import MinimalHeader from '../components/MinimalHeader';
-import { authAPI } from '../api/auth';
+import { authAPI } from '../services/auth';
 
 const LoginPage = () => {
   const [formData, setFormData] = useState({

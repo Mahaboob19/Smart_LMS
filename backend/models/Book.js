@@ -7,6 +7,7 @@ const bookSchema = new mongoose.Schema({
     totalCopies: { type: Number, required: true, min: 1 },
     availableCopies: { type: Number, required: true, min: 0 },
     description: { type: String, required: true },
+    qrCodes: [{ type: String }],
     createdAt: { type: Date, default: Date.now }
 });
 

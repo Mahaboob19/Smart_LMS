@@ -8,7 +8,7 @@ import Stats from '../components/Stats';
 import About from '../components/About';
 import Contact from '../components/Contact';
 import Footer from '../components/Footer';
-import { authAPI } from '../api/auth';
+import { authAPI } from '../services/auth';
 
 const LandingPage = () => {
   const navigate = useNavigate();

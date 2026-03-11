@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
-import { authAPI } from '../api/auth';
+import { authAPI } from '../services/auth';
 import { departments } from '../utils/departments';
 
 const AdminManagementPage = () => {

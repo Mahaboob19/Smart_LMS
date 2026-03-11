@@ -1,7 +1,7 @@
 // components/Header.jsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { authAPI } from '../api/auth';
+import { authAPI } from '../services/auth';
 
 const Header = ({ customNavItems, activeSection, onNavClick }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);

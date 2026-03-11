@@ -7,7 +7,7 @@ import SignupPage from './pages/SignupPage';
 import DashboardPage from './pages/DashboardPage';
 import AdminManagementPage from './pages/AdminManagementPage';
 import ProtectedRoute from './components/ProtectedRoute';
-import { authAPI } from './api/auth';
+import { authAPI } from './services/auth';
 
 // Component to handle root route - show dashboard if logged in, landing if not
 const RootRoute = () => {

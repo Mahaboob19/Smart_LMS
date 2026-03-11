@@ -1,18 +1,20 @@
 // pages/DashboardPage.jsx
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import QRCode from 'react-qr-code';
 import Header from '../components/Header';
 import MinimalFooter from '../components/MinimalFooter';
-import { authAPI } from '../api/auth';
-import { librarianAPI } from '../api/librarian';
-import { hodAPI } from '../api/hod';
-import { studentAPI } from '../api/student';
+import { authAPI } from '../services/auth';
+import { librarianAPI } from '../services/librarian';
+import { hodAPI } from '../services/hod';
+import { studentAPI } from '../services/student';
 const DashboardPage = () => {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeSection, setActiveSection] = useState('dashboard');
   const [showAddBookForm, setShowAddBookForm] = useState(false);
+  const [generatedQRCodes, setGeneratedQRCodes] = useState(null);
   const [books, setBooks] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [newBook, setNewBook] = useState({
@@ -26,10 +28,11 @@ const DashboardPage = () => {
   // Transactions State
   const [showIssueBookForm, setShowIssueBookForm] = useState(false);
   const [transactions, setTransactions] = useState([]);
+  const [allUsers, setAllUsers] = useState([]); // New state for fetched users
   const [newTransaction, setNewTransaction] = useState({
-    bookId: '',
-    userId: '',
-    dueDate: ''
+    qrCode: '',
+    userIdentifier: '',
+    issueDays: 15 // Default 15 days
   });
 
   // Analytics & Messages State
@@ -46,6 +49,8 @@ const DashboardPage = () => {
   const [hodAnalyticsStats, setHodAnalyticsStats] = useState(null);
   const [recommendations, setRecommendations] = useState([]);
   const [showAddRecommendationForm, setShowAddRecommendationForm] = useState(false);
+  const [showEditBookForm, setShowEditBookForm] = useState(false);
+  const [editingBook, setEditingBook] = useState(null);
   const [newRecommendation, setNewRecommendation] = useState({
     title: '',
     author: '',
@@ -135,12 +140,13 @@ const DashboardPage = () => {
 
   useEffect(() => {
     if (user?.userType === 'librarian') {
+      if (activeSection === 'dashboard' || activeSection === 'analytics') {
+        fetchAnalytics();
+      }
       if (activeSection === 'books') {
         fetchBooks();
       } else if (activeSection === 'transactions') {
         fetchTransactions();
-      } else if (activeSection === 'analytics') {
-        fetchAnalytics();
       } else if (activeSection === 'messages') {
         fetchMessages();
       }
@@ -212,11 +218,59 @@ const DashboardPage = () => {
         setNewBook({ title: '', author: '', department: '', totalCopies: '', description: '' });
         setShowAddBookForm(false);
         fetchBooks(); // Refresh books list
+        fetchAnalytics(); // Refresh analytics
+        if (response.book && response.book.qrCodes) {
+            setGeneratedQRCodes({ title: response.book.title, codes: response.book.qrCodes });
+        }
       } else {
         alert(response.message || 'Failed to add book');
       }
     } catch (error) {
       alert('An error occurred while adding the book');
+    }
+  };
+
+  const handleEditBookSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const response = await librarianAPI.updateBook(editingBook._id, {
+        title: editingBook.title,
+        author: editingBook.author,
+        totalCopies: parseInt(editingBook.totalCopies),
+        description: editingBook.description
+      });
+      if (response.success) {
+        alert('Book updated successfully!');
+        setEditingBook(null);
+        setShowEditBookForm(false);
+        fetchBooks(); // Refresh books list
+        fetchAnalytics(); // Refresh analytics
+        if (response.book && response.book.qrCodes && parseInt(editingBook.totalCopies) > editingBook.originalCopies) {
+            setGeneratedQRCodes({ title: response.book.title, codes: response.book.qrCodes });
+        }
+      } else {
+        alert(response.message || 'Failed to update book');
+      }
+    } catch (error) {
+      alert('An error occurred while updating the book');
+    }
+  };
+
+  const handleDeleteBook = async (id, title) => {
+    if (!window.confirm(`Are you sure you want to delete "${title}"? This cannot be undone.`)) {
+      return;
+    }
+    try {
+      const response = await librarianAPI.deleteBook(id);
+      if (response.success) {
+        alert('Book deleted successfully!');
+        fetchBooks(); // Auto-refresh table
+        fetchAnalytics(); // Auto-refresh metrics
+      } else {
+        alert(response.message || 'Failed to delete book');
+      }
+    } catch (error) {
+      alert('An error occurred while deleting the book');
     }
   };
 
@@ -231,24 +285,42 @@ const DashboardPage = () => {
     }
   };
 
+
   const fetchTransactions = async () => {
     try {
       const response = await librarianAPI.getTransactions();
       if (response.success) {
         setTransactions(response.transactions);
       }
+      
+      // Fetch users for the dropdown when entering transactions view
+      if (allUsers.length === 0) {
+        const usersResponse = await librarianAPI.getUsers();
+        if (usersResponse.success) {
+          setAllUsers(usersResponse.users);
+        }
+      }
     } catch (error) {
-      console.error('Failed to fetch transactions', error);
+      console.error('Failed to fetch transactions or users', error);
     }
   };
 
   const handleIssueBook = async (e) => {
     e.preventDefault();
     try {
-      const response = await librarianAPI.issueBook(newTransaction);
+      // Calculate dueDate based on issueDays
+      const dueDateStr = new Date(Date.now() + newTransaction.issueDays * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      
+      const payload = {
+        qrCode: newTransaction.qrCode,
+        userIdentifier: newTransaction.userIdentifier,
+        dueDate: dueDateStr
+      };
+
+      const response = await librarianAPI.issueBook(payload);
       if (response.success) {
         alert('Book issued successfully!');
-        setNewTransaction({ bookId: '', userId: '', dueDate: '' });
+        setNewTransaction({ qrCode: '', userIdentifier: '', issueDays: 15 });
         setShowIssueBookForm(false);
         fetchTransactions();
       } else {
@@ -615,7 +687,7 @@ const DashboardPage = () => {
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
                   <span className="text-sm font-medium">Total Books</span>
                 </div>
-                <span className="text-2xl font-bold text-gray-900">0</span>
+                <span className="text-2xl font-bold text-gray-900">{analyticsStats?.totalBooks || 0}</span>
               </div>
 
               {/* Issued Books */}
@@ -624,7 +696,7 @@ const DashboardPage = () => {
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                   <span className="text-sm font-medium">Issued Books</span>
                 </div>
-                <span className="text-2xl font-bold text-gray-900">0</span>
+                <span className="text-2xl font-bold text-gray-900">{analyticsStats?.totalIssuesCount || 0}</span>
               </div>
 
               {/* Student Issues */}
@@ -633,7 +705,7 @@ const DashboardPage = () => {
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
                   <span className="text-sm font-medium">Student Issues</span>
                 </div>
-                <span className="text-2xl font-bold text-gray-900">0</span>
+                <span className="text-2xl font-bold text-gray-900">{analyticsStats?.studentIssuesCount || 0}</span>
               </div>
 
               {/* Staff Issues */}
@@ -642,7 +714,7 @@ const DashboardPage = () => {
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
                   <span className="text-sm font-medium">Staff Issues</span>
                 </div>
-                <span className="text-2xl font-bold text-gray-900">0</span>
+                <span className="text-2xl font-bold text-gray-900">{analyticsStats?.staffIssuesCount || 0}</span>
               </div>
             </div>
 
@@ -719,7 +791,7 @@ const DashboardPage = () => {
   const renderBooks = () => (
     <div className="max-w-6xl mx-auto">
       <div className="bg-gray-50 rounded-xl p-6 border border-gray-100">
-        {!showAddBookForm ? (
+        {!showAddBookForm && !showEditBookForm ? (
           <>
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-xl font-bold text-gray-800">
@@ -753,7 +825,7 @@ const DashboardPage = () => {
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Author</th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Department</th>
                     <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Available / Total</th>
-                    {user.userType === 'student' && (
+                    {['student', 'admin', 'librarian'].includes(user.userType) && (
                       <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
                     )}
                   </tr>
@@ -779,17 +851,42 @@ const DashboardPage = () => {
                           </span>
                           <span className="text-gray-500"> / {book.totalCopies}</span>
                         </td>
-                        {user.userType === 'student' && (
+                        {['student', 'admin', 'librarian'].includes(user.userType) && (
                           <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                            <button
-                              onClick={() => {
-                                setSelectedBookForRequest(book);
-                                setShowRequestBookModal(true);
-                              }}
-                              className="text-blue-600 hover:text-blue-900 bg-blue-50 px-3 py-1 rounded-md transition-colors"
-                            >
-                              Request
-                            </button>
+                            {user.userType === 'student' ? (
+                              <button
+                                onClick={() => {
+                                  setSelectedBookForRequest(book);
+                                  setShowRequestBookModal(true);
+                                }}
+                                className="text-blue-600 hover:text-blue-900 bg-blue-50 px-3 py-1 rounded-md transition-colors"
+                              >
+                                Request
+                              </button>
+                            ) : (
+                              <div className="flex justify-end space-x-2">
+                                <button
+                                  onClick={() => {
+                                    setEditingBook({
+                                      ...book,
+                                      originalCopies: book.totalCopies
+                                    });
+                                    setShowEditBookForm(true);
+                                  }}
+                                  className="text-blue-600 hover:text-blue-900 bg-blue-50 px-3 py-1 rounded-md transition-colors"
+                                  title="Edit Book"
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteBook(book._id, book.title)}
+                                  className="text-red-600 hover:text-red-900 bg-red-50 px-3 py-1 rounded-md transition-colors"
+                                  title="Delete Book"
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            )}
                           </td>
                         )}
                       </tr>
@@ -805,6 +902,87 @@ const DashboardPage = () => {
               </table>
             </div>
           </>
+        ) : showEditBookForm && editingBook ? (
+          <div className="bg-white p-6 rounded-lg border border-gray-200">
+            <h3 className="text-xl font-semibold text-gray-800 mb-6 border-b pb-2">Edit Book: {editingBook.title}</h3>
+            <form className="space-y-4" onSubmit={handleEditBookSubmit}>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
+                  <input
+                    type="text"
+                    value={editingBook.title}
+                    onChange={(e) => setEditingBook({ ...editingBook, title: e.target.value })}
+                    className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Book Title"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Author</label>
+                  <input
+                    type="text"
+                    value={editingBook.author}
+                    onChange={(e) => setEditingBook({ ...editingBook, author: e.target.value })}
+                    className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Author Name"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
+                  <select
+                    value={editingBook.department}
+                    disabled
+                    className="w-full px-4 py-2 rounded-lg border border-gray-300 bg-gray-50 focus:outline-none"
+                    required
+                  >
+                    <option value={editingBook.department}>{editingBook.department}</option>
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">Department cannot be changed as QR codes are linked to it.</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Total Copies</label>
+                  <input
+                    type="number"
+                    min={editingBook.originalCopies}
+                    value={editingBook.totalCopies}
+                    onChange={(e) => setEditingBook({ ...editingBook, totalCopies: e.target.value })}
+                    className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Number of copies"
+                    required
+                  />
+                  <p className="text-xs text-gray-500 mt-1">You can only increase total copies. Decreasing is not allowed.</p>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                <textarea
+                  rows="3"
+                  value={editingBook.description}
+                  onChange={(e) => setEditingBook({ ...editingBook, description: e.target.value })}
+                  className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Book description..."
+                  required
+                ></textarea>
+              </div>
+              <div className="flex justify-end space-x-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowEditBookForm(false)}
+                  className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
         ) : (
           <div className="bg-white p-6 rounded-lg border border-gray-200">
             <h3 className="text-xl font-semibold text-gray-800 mb-6 border-b pb-2">Add New Book</h3>
@@ -944,9 +1122,87 @@ const DashboardPage = () => {
             </div>
           </div>
         )}
+
+        {/* QR Codes Modal */}
+        {generatedQRCodes && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 no-print">
+            <div className="bg-white rounded-xl shadow-xl p-8 max-w-4xl w-full mx-4 relative max-h-[90vh] overflow-y-auto">
+              <button
+                onClick={() => setGeneratedQRCodes(null)}
+                className="absolute p-2 top-4 right-4 text-gray-400 hover:text-gray-600 no-print"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+              </button>
+              <h3 className="text-xl font-bold text-gray-900 mb-2 no-print">QR Codes for {generatedQRCodes.title}</h3>
+              <p className="text-gray-500 text-sm mb-6 no-print">
+                These are the unique QR codes for each copy of the book. Print them now to attach to the physical books.
+              </p>
+
+              <div id="printable-qr-codes" className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-6 p-4 bg-white">
+                {generatedQRCodes.codes.map((code, index) => (
+                  <div key={index} className="flex flex-col items-center p-4 border rounded-lg page-break-inside-avoid shadow-sm qr-item" style={{ width: '180px' }}>
+                    <QRCode value={code} size={120} />
+                    <p className="mt-3 font-mono text-sm font-semibold text-center">{code}</p>
+                    <p className="text-xs text-gray-500 text-center mt-1 truncate w-full" title={generatedQRCodes.title}>{generatedQRCodes.title}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex justify-end space-x-3 mt-8 pt-4 border-t no-print">
+                <button
+                  onClick={() => {
+                    const printWindow = window.open('', '_blank', 'width=800,height=600');
+                    const content = document.getElementById('printable-qr-codes').innerHTML;
+                    printWindow.document.write(`
+                      <html>
+                        <head>
+                          <title>Print QR Codes - ${generatedQRCodes.title}</title>
+                          <style>
+                            body { font-family: system-ui, -apple-system, sans-serif; padding: 20px; }
+                            .grid { display: flex; flex-wrap: wrap; gap: 20px; justify-content: flex-start; }
+                            .qr-item { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 15px; border: 1px solid #e5e7eb; border-radius: 8px; width: 160px; page-break-inside: avoid; }
+                            .font-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 13px; font-weight: 600; margin-top: 12px; margin-bottom: 0; text-align: center; }
+                            .text-xs { font-size: 11px; color: #6b7280; margin-top: 4px; margin-bottom: 0; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; }
+                            svg { width: 120px; height: 120px; display: block; }
+                          </style>
+                        </head>
+                        <body>
+                          <h2 style="margin-bottom: 20px; color: #111827;">QR Codes for: ${generatedQRCodes.title}</h2>
+                          <div class="grid">
+                            ${content}
+                          </div>
+                          <script>
+                            window.onload = function() {
+                              setTimeout(function() {
+                                window.print();
+                                window.close();
+                              }, 250);
+                            };
+                          </script>
+                        </body>
+                      </html>
+                    `);
+                    printWindow.document.close();
+                  }}
+                  className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium transition-colors flex items-center"
+                >
+                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+                  Print to PDF
+                </button>
+                <button
+                  onClick={() => setGeneratedQRCodes(null)}
+                  className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
+
 
   const renderRecommendations = () => (
     <div className="max-w-6xl mx-auto">
@@ -1117,35 +1373,37 @@ const DashboardPage = () => {
 
     return (
       <div className="max-w-6xl mx-auto">
-        <div className="mb-8">
-          <h3 className="text-xl font-semibold text-gray-800 mb-4">Library Analytics</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-              <h4 className="text-sm font-medium text-gray-500 mb-2">Total Books (Titles)</h4>
-              <span className="text-3xl font-bold text-gray-900">{analyticsStats.totalTitles || 0}</span>
+        <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">Analytics Overview</h2>
+          <p className="text-gray-600 mb-8">View library and user statistics.</p>
+          
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+            <div className="bg-blue-50 p-6 rounded-lg text-center border border-blue-100">
+              <div className="text-3xl font-bold text-blue-600">{analyticsStats.totalBooks || 0}</div>
+              <div className="text-sm text-gray-600 mt-2">Total Unique Books</div>
             </div>
+            <div className="bg-green-50 p-6 rounded-lg text-center border border-green-100">
+              <div className="text-3xl font-bold text-green-600">{analyticsStats.totalIssuesCount || 0}</div>
+              <div className="text-sm text-gray-600 mt-2">Currently Issued</div>
+            </div>
+            <div className="bg-purple-50 p-6 rounded-lg text-center border border-purple-100">
+              <div className="text-3xl font-bold text-purple-600">{analyticsStats.studentIssuesCount || 0}</div>
+              <div className="text-sm text-gray-600 mt-2">Student Issues</div>
+            </div>
+            <div className="bg-orange-50 p-6 rounded-lg text-center border border-orange-100">
+              <div className="text-3xl font-bold text-orange-600">{analyticsStats.staffIssuesCount || 0}</div>
+              <div className="text-sm text-gray-600 mt-2">Staff Issues</div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-              <h4 className="text-sm font-medium text-gray-500 mb-2">Total Copies</h4>
+              <h4 className="text-sm font-medium text-gray-500 mb-2">Total Physical Copies</h4>
               <span className="text-3xl font-bold text-gray-900">{analyticsStats.totalCopies || 0}</span>
             </div>
             <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-              <h4 className="text-sm font-medium text-gray-500 mb-2">Available Copies</h4>
+              <h4 className="text-sm font-medium text-gray-500 mb-2">Available Physical Copies</h4>
               <span className="text-3xl font-bold text-green-600">{analyticsStats.availableCopies || 0}</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          <div className="bg-gray-50 rounded-xl p-6 border border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">Student Statistics</h3>
-            <div className="space-y-2 text-sm text-gray-600">
-              <p>Active Issues: {analyticsStats.studentIssuesCount || 0}</p>
-            </div>
-          </div>
-          <div className="bg-gray-50 rounded-xl p-6 border border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">Staff Statistics</h3>
-            <div className="space-y-2 text-sm text-gray-600">
-              <p>Active Issues: {analyticsStats.staffIssuesCount || 0}</p>
             </div>
           </div>
         </div>
@@ -1312,8 +1570,14 @@ const DashboardPage = () => {
                   {transactions.length > 0 ? (
                     transactions.map((tx) => (
                       <tr key={tx._id}>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{tx.book?.title}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{tx.user?.libraryCardNumber}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                          {tx.book?.title} <br/>
+                          <span className="text-xs text-gray-500 font-mono mt-1">QR: {tx.qrCode}</span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {tx.user?.firstName} {tx.user?.lastName} <br/>
+                          <span className="text-xs mt-1">ID: {tx.user?.rollNumber || tx.user?.libraryCardNumber || tx.user?.staffId || tx.user?.email}</span>
+                        </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(tx.issuedDate).toLocaleDateString()}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(tx.dueDate).toLocaleDateString()}</td>
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -1341,38 +1605,50 @@ const DashboardPage = () => {
             <form className="space-y-4" onSubmit={handleIssueBook}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Book ID</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Book QR Code (Scan with Mobile/Cable)</label>
                   <input
                     type="text"
-                    value={newTransaction.bookId}
-                    onChange={(e) => setNewTransaction({ ...newTransaction, bookId: e.target.value })}
-                    className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="MongoDB Book ID"
+                    value={newTransaction.qrCode}
+                    onChange={(e) => setNewTransaction({ ...newTransaction, qrCode: e.target.value.trim() })}
+                    className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                    placeholder="Scan or enter QR Code"
                     required
+                    autoFocus
                   />
-                  <p className="text-xs text-gray-500 mt-1">Temporary: Please enter the exact MongoDB Object ID of the book</p>
+                  <p className="text-xs text-gray-500 mt-1">Scan physical book's QR code</p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">User ID</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Library Card Number / User ID</label>
                   <input
                     type="text"
-                    value={newTransaction.userId}
-                    onChange={(e) => setNewTransaction({ ...newTransaction, userId: e.target.value })}
+                    list="userSearchList"
+                    value={newTransaction.userIdentifier}
+                    onChange={(e) => setNewTransaction({ ...newTransaction, userIdentifier: e.target.value })}
                     className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="MongoDB User ID"
+                    placeholder="Search name, roll no, or library card..."
                     required
+                    autoComplete="off"
                   />
-                  <p className="text-xs text-gray-500 mt-1">Temporary: Please enter the exact MongoDB Object ID of the user</p>
+                  <datalist id="userSearchList">
+                    {allUsers.map((u) => (
+                      <option key={u._id} value={u.libraryCardNumber || u.rollNumber || u.staffId || u.email}>
+                        {u.firstName} {u.lastName} ({u.userType})
+                      </option>
+                    ))}
+                  </datalist>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Due Date</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Number of Days</label>
                   <input
-                    type="date"
-                    value={newTransaction.dueDate}
-                    onChange={(e) => setNewTransaction({ ...newTransaction, dueDate: e.target.value })}
+                    type="number"
+                    min="1"
+                    max="180"
+                    value={newTransaction.issueDays}
+                    onChange={(e) => setNewTransaction({ ...newTransaction, issueDays: parseInt(e.target.value) || 1 })}
                     className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     required
                   />
+                  <p className="text-xs text-gray-500 mt-1">Due Date will be calculated automatically</p>
                 </div>
               </div>
               <div className="flex justify-end space-x-3 pt-4">
@@ -1520,6 +1796,7 @@ const DashboardPage = () => {
       </div>
     </div>
   );
+
 
   const renderContent = () => {
     switch (activeSection) {
