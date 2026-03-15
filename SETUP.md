@@ -50,8 +50,8 @@ npm run dev
 
 ### 4. Verify Installation
 
-1. Backend: http://localhost:5000/api/health
-2. Frontend: http://localhost:5173
+1. Live Site: https://smart-lms-5zdm.onrender.com
+2. Health Check: https://smart-lms-5zdm.onrender.com/api/health
 
 ## Common Issues
 

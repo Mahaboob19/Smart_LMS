@@ -6,7 +6,9 @@ import Footer from '../components/Footer';
 import { authAPI } from '../services/auth';
 import { departments } from '../utils/departments';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+const API_BASE_URL = import.meta.env.MODE === 'production' 
+  ? 'https://smart-lms-5zdm.onrender.com/api' 
+  : (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api');
 
 const AdminManagementPage = () => {
   const navigate = useNavigate();

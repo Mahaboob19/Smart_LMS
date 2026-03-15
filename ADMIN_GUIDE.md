@@ -8,7 +8,7 @@ This guide explains how administrators manage authentication codes for HOD, Prin
 1. **Login** as an Administrator or Principal
 2. Navigate to your **Dashboard** (`/`)
 3. Click on **"Admin Management"** in the Quick Actions section
-4. Or directly visit: `http://localhost:3000/admin/management`
+4. Or directly visit: `https://smart-lms-5zdm.onrender.com/admin/management`
 
 ## Generating Authentication Codes
 
