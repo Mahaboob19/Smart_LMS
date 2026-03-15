@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: smart-library-lms
+    env: node
+    buildCommand: npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: 18.0.0
+      - key: MONGODB_URI
+        fromDatabase:
+          name: library-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ADMIN_AUTH_CODE
+        value: VVIT_ADMIN_2024
+      - key: PORT
+        value: 10000
+
+databases:
+  - name: library-db
+    plan: free

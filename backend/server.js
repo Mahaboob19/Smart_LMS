@@ -13,6 +13,8 @@ const hodRoutes = require('./routes/hodRoutes');
 const studentRoutes = require('./routes/studentRoutes');
 const messagesRoutes = require('./routes/messagesRoutes');
 
+const path = require('path');
+
 const app = express();
 
 // Connect to database
@@ -41,6 +43,18 @@ app.use('/api/messages', messagesRoutes);
 // Shared / fallback routes (e.g. for /api/books or /api/departments)
 app.use('/api', adminRoutes);
 app.use('/api', librarianRoutes);
+
+// Serve Static Assets in Production
+if (process.env.NODE_ENV === 'production' || true) { // Defaulting for simple Render deployment
+  const frontendPath = path.join(__dirname, '../smart-library-lms/dist');
+  app.use(express.static(frontendPath));
+
+  app.get('*', (req, res) => {
+    if (!req.path.startsWith('/api')) {
+      res.sendFile(path.resolve(__dirname, '../smart-library-lms/dist/index.html'));
+    }
+  });
+}
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
