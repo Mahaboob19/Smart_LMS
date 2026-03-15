@@ -50,7 +50,7 @@ npm run dev
 
 ### 4. Verify Installation
 
-1. Live Site: https://smart-lms-5zdm.onrender.com
+1. Live Site: https://smart-lms-frontend-7v7u.onrender.com
 2. Health Check: https://smart-lms-5zdm.onrender.com/api/health
 
 ## Common Issues
