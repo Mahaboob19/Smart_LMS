@@ -32,14 +32,15 @@ app.use(express.json());
 
 // API Routes
 app.use('/api/auth', authRoutes);
-app.use('/api', adminRoutes); // Departments, general users, auth codes
-
-// Role-specific base route mounts
+app.use('/api/admin', adminRoutes);
 app.use('/api/librarian', librarianRoutes);
-app.use('/api', librarianRoutes); // For generic books/transactions that were mounted on root /api in index.js
 app.use('/api/hod', hodRoutes);
 app.use('/api/student', studentRoutes);
 app.use('/api/messages', messagesRoutes);
+
+// Shared / fallback routes (e.g. for /api/books or /api/departments)
+app.use('/api', adminRoutes);
+app.use('/api', librarianRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

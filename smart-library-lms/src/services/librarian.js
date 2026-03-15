@@ -65,6 +65,19 @@ export const librarianAPI = {
         }
     },
 
+    returnBook: async (id) => {
+        try {
+            const response = await fetch(`${API_BASE_URL}/transactions/${id}/return`, {
+                method: 'PUT',
+                headers: getAuthHeaders()
+            });
+            return await response.json();
+        } catch (error) {
+            console.error('returnBook error:', error);
+            return { success: false, message: 'Network error' };
+        }
+    },
+
     getAnalytics: async () => {
         try {
             const response = await fetch(`${API_BASE_URL}/librarian/analytics`, {
@@ -99,6 +112,32 @@ export const librarianAPI = {
             return await response.json();
         } catch (error) {
             console.error('getMessages error:', error);
+            return { success: false, message: 'Network error' };
+        }
+    },
+
+    getRequests: async () => {
+        try {
+            const response = await fetch(`${API_BASE_URL}/librarian/requests`, {
+                headers: getAuthHeaders()
+            });
+            return await response.json();
+        } catch (error) {
+            console.error('getRequests error:', error);
+            return { success: false, message: 'Network error' };
+        }
+    },
+
+    updateRequestStatus: async (id, status) => {
+        try {
+            const response = await fetch(`${API_BASE_URL}/librarian/requests/${id}`, {
+                method: 'PUT',
+                headers: getAuthHeaders(),
+                body: JSON.stringify({ status })
+            });
+            return await response.json();
+        } catch (error) {
+            console.error('updateRequestStatus error:', error);
             return { success: false, message: 'Network error' };
         }
     }

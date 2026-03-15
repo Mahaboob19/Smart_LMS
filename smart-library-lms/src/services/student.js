@@ -84,5 +84,34 @@ export const studentAPI = {
             console.error('API Error (getRequests):', error);
             return { success: false, message: 'Network error occurred' };
         }
+    },
+
+    // Add a Review
+    addReview: async (bookId, payload) => {
+        try {
+            const response = await fetch(`${API_BASE_URL}/student/books/${bookId}/reviews`, {
+                method: 'POST',
+                headers: getHeaders(),
+                body: JSON.stringify(payload)
+            });
+            return await response.json();
+        } catch (error) {
+            console.error('API Error (addReview):', error);
+            return { success: false, message: 'Network error occurred' };
+        }
+    },
+
+    // Get Student Transactions
+    getTransactions: async () => {
+        try {
+            const response = await fetch(`${API_BASE_URL}/student/transactions`, {
+                method: 'GET',
+                headers: getHeaders(),
+            });
+            return await response.json();
+        } catch (error) {
+            console.error('API Error (getTransactions):', error);
+            return { success: false, message: 'Network error occurred' };
+        }
     }
 };

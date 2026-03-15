@@ -6,6 +6,8 @@ import Footer from '../components/Footer';
 import { authAPI } from '../services/auth';
 import { departments } from '../utils/departments';
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+
 const AdminManagementPage = () => {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
@@ -41,7 +43,7 @@ const AdminManagementPage = () => {
   const fetchAuthCodes = async () => {
     try {
       const token = authAPI.getToken();
-      const response = await fetch('http://localhost:5000/api/admin/auth-codes', {
+      const response = await fetch(`${API_BASE_URL}/admin/auth-codes`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -63,7 +65,7 @@ const AdminManagementPage = () => {
 
     try {
       const token = authAPI.getToken();
-      const response = await fetch('http://localhost:5000/api/admin/generate-code', {
+      const response = await fetch(`${API_BASE_URL}/admin/generate-code`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

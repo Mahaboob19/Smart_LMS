@@ -43,8 +43,10 @@ const Header = ({ customNavItems, activeSection, onNavClick }) => {
 
   const handleProfileClick = () => {
     setShowDropdown(false);
-    // Navigate to profile page or show profile modal
-    // For now, just close dropdown
+    setIsMenuOpen(false);
+    if (onNavClick) {
+      onNavClick('profile');
+    }
   };
 
   const handleNavItemClick = (e, item) => {

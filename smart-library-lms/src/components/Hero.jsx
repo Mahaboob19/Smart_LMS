@@ -35,13 +35,13 @@ const Hero = () => {
             Manage your borrowings and fines seamlessly with our digital smart system.
           </p>
           <div className="flex flex-col sm:flex-row gap-4">
-            <button className="bg-blue-600 text-white px-8 py-3 rounded-lg hover:bg-blue-700 transition-colors duration-200 font-medium text-lg flex items-center justify-center gap-2">
+            <a href="#about" className="bg-blue-600 text-white px-8 py-3 rounded-lg hover:bg-blue-700 transition-colors duration-200 font-medium text-lg flex items-center justify-center gap-2">
               Learn More
               <ArrowRightIcon />
-            </button>
-            <button className="border-2 border-gray-300 text-gray-700 px-8 py-3 rounded-lg hover:border-blue-600 hover:text-blue-600 transition-colors duration-200 font-medium text-lg">
+            </a>
+            <a href="#features" className="border-2 border-gray-300 text-gray-700 px-8 py-3 rounded-lg hover:border-blue-600 hover:text-blue-600 transition-colors duration-200 text-center font-medium text-lg">
               Explore Features
-            </button>
+            </a>
           </div>
           <p className="text-gray-500 text-sm mt-4">
             University ID required for borrowing • 24/7 Digital Access

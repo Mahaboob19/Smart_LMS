@@ -68,6 +68,7 @@ const register = async (req, res) => {
       });
     }
 
+
     const user = new User({
       firstName,
       lastName,
@@ -144,6 +145,11 @@ const login = async (req, res) => {
       });
     }
 
+    if (!user.libraryCardNumber && (user.userType === 'student' || user.userType === 'staff')) {
+      user.libraryCardNumber = `LIB${Date.now().toString().slice(-6)}`;
+      await user.save();
+    }
+
     const token = jwt.sign(
       { id: user._id, email: user.email, userType: user.userType },
       JWT_SECRET,
@@ -188,6 +194,11 @@ const getMe = async (req, res) => {
       });
     }
 
+    if (!user.libraryCardNumber && (user.userType === 'student' || user.userType === 'staff')) {
+      user.libraryCardNumber = `LIB${Date.now().toString().slice(-6)}`;
+      await user.save();
+    }
+
     res.json({
       success: true,
       user: {
@@ -212,8 +223,37 @@ const getMe = async (req, res) => {
   }
 };
 
+const changePassword = async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ success: false, message: 'Please provide both current and new passwords' });
+    }
+
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    const isMatch = await bcrypt.compare(currentPassword, user.password);
+    if (!isMatch) {
+      return res.status(401).json({ success: false, message: 'Incorrect current password' });
+    }
+
+    user.password = newPassword;
+    await user.save();
+
+    res.json({ success: true, message: 'Password updated successfully' });
+  } catch (error) {
+    console.error('Change password error:', error);
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+};
+
 module.exports = {
   register,
   login,
-  getMe
+  getMe,
+  changePassword
 };

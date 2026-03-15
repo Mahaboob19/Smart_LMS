@@ -6,8 +6,10 @@ const BookRequest = require('../models/BookRequest');
 
 const getAnalytics = async (req, res) => {
   try {
-    const studentId = req.user.id;
-    const transactions = await Transaction.find({ user: studentId });
+    const student = await User.findById(req.user.id);
+    if (!student) return res.status(404).json({ success: false, message: 'User not found' });
+
+    const transactions = await Transaction.find({ user: student._id });
 
     const totalIssued = transactions.length;
     const currentlyIssued = transactions.filter(t => t.status === 'Issued').length;
@@ -123,10 +125,81 @@ const getRequests = async (req, res) => {
   }
 };
 
+const addReview = async (req, res) => {
+  try {
+    const { bookId } = req.params;
+    const { rating, comment } = req.body;
+    const userId = req.user.id;
+
+    if (!rating || rating < 1 || rating > 5) {
+      return res.status(400).json({ success: false, message: 'Rating must be between 1 and 5' });
+    }
+
+    const book = await Book.findById(bookId);
+    if (!book) {
+      return res.status(404).json({ success: false, message: 'Book not found' });
+    }
+
+    // Optional: check if user already reviewed
+    const existingReviewIndex = book.reviews.findIndex(r => r.user.toString() === userId);
+    
+    if (existingReviewIndex !== -1) {
+      // Update existing review
+      book.reviews[existingReviewIndex].rating = rating;
+      book.reviews[existingReviewIndex].comment = comment;
+      book.reviews[existingReviewIndex].createdAt = Date.now();
+    } else {
+      // Add new review
+      book.reviews.push({ user: userId, rating, comment });
+    }
+
+    await book.save();
+    
+    // Return the updated reviews with populated user info
+    const updatedBook = await Book.findById(bookId).populate('reviews.user', 'firstName lastName');
+
+    res.json({ success: true, message: 'Review added successfully', reviews: updatedBook.reviews });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+};
+
+const getTransactions = async (req, res) => {
+  try {
+    const student = await User.findById(req.user.id);
+    if (!student) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    const transactions = await Transaction.find({ user: student._id })
+      .populate('book', 'title author')
+      .sort({ issuedDate: -1 });
+
+    const FINE_PER_DAY = 10;
+    const now = new Date();
+
+    const updatedTransactions = transactions.map(tx => {
+      let currentFine = tx.fine || 0;
+      if (tx.status === 'Issued' && now > new Date(tx.dueDate)) {
+        const diffTime = Math.abs(now - new Date(tx.dueDate));
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        currentFine = diffDays * FINE_PER_DAY;
+      }
+      return { ...tx.toObject(), fine: currentFine };
+    });
+
+    res.json({ success: true, transactions: updatedTransactions });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+};
+
 module.exports = {
   getAnalytics,
   getBooks,
   getRecommendations,
   requestBook,
-  getRequests
+  getRequests,
+  addReview,
+  getTransactions
 };

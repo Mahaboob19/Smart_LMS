@@ -134,4 +134,23 @@ export const authAPI = {
       return { success: false, error: 'Network error' };
     }
   },
+
+  // Change Password
+  changePassword: async (currentPassword, newPassword) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/change-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${getToken()}`,
+        },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+
+      return await response.json();
+    } catch (error) {
+      console.error('Change password error:', error);
+      return { success: false, message: 'Network error occurred' };
+    }
+  }
 };

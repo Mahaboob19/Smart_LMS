@@ -39,24 +39,24 @@ const addBook = async (req, res) => {
     };
     const deptCode = deptCodeMap[department] || department.substring(0, 2).toUpperCase();
 
-    const booksInDept = await Book.find({ department, qrCodes: { $exists: true, $not: {$size: 0} } }, 'qrCodes');
+    const booksInDept = await Book.find({ department, qrCodes: { $exists: true, $not: { $size: 0 } } }, 'qrCodes');
     let maxSeq = 0;
     booksInDept.forEach(b => {
-        if (b.qrCodes) {
-            b.qrCodes.forEach(code => {
-                const match = code.match(/(\d+)$/);
-                if (match) {
-                    const num = parseInt(match[1], 10);
-                    if (num > maxSeq) maxSeq = num;
-                }
-            });
-        }
+      if (b.qrCodes) {
+        b.qrCodes.forEach(code => {
+          const match = code.match(/(\d+)$/);
+          if (match) {
+            const num = parseInt(match[1], 10);
+            if (num > maxSeq) maxSeq = num;
+          }
+        });
+      }
     });
 
     const qrCodes = [];
     for (let i = 1; i <= totalCopies; i++) {
-        const seq = (maxSeq + i).toString().padStart(4, '0');
-        qrCodes.push(`VVITU${deptCode}${seq}`);
+      const seq = (maxSeq + i).toString().padStart(4, '0');
+      qrCodes.push(`VVITU${deptCode}${seq}`);
     }
 
     const book = new Book({
@@ -106,7 +106,7 @@ const updateBook = async (req, res) => {
     }
 
     const { title, author, totalCopies, description } = req.body;
-    
+
     if (totalCopies < book.totalCopies) {
       return res.status(400).json({ success: false, message: 'Cannot reduce total copies. QR Codes are already mapped physically. Please create a new book entry or adjust another way.' });
     }
@@ -116,24 +116,24 @@ const updateBook = async (req, res) => {
       const deptCodeMap = { 'CSE': 'CS', 'ECE': 'EC', 'ME': 'ME', 'CE': 'CE' };
       const deptCode = deptCodeMap[book.department] || book.department.substring(0, 2).toUpperCase();
 
-      const booksInDept = await Book.find({ department: book.department, qrCodes: { $exists: true, $not: {$size: 0} } }, 'qrCodes');
+      const booksInDept = await Book.find({ department: book.department, qrCodes: { $exists: true, $not: { $size: 0 } } }, 'qrCodes');
       let maxSeq = 0;
       booksInDept.forEach(b => {
-          if (b.qrCodes) {
-              b.qrCodes.forEach(code => {
-                  const match = code.match(/(\d+)$/);
-                  if (match) {
-                      const num = parseInt(match[1], 10);
-                      if (num > maxSeq) maxSeq = num;
-                  }
-              });
-          }
+        if (b.qrCodes) {
+          b.qrCodes.forEach(code => {
+            const match = code.match(/(\d+)$/);
+            if (match) {
+              const num = parseInt(match[1], 10);
+              if (num > maxSeq) maxSeq = num;
+            }
+          });
+        }
       });
 
       const newQrCodes = [];
       for (let i = 1; i <= addedCopies; i++) {
-          const seq = (maxSeq + i).toString().padStart(4, '0');
-          newQrCodes.push(`VVITU${deptCode}${seq}`);
+        const seq = (maxSeq + i).toString().padStart(4, '0');
+        newQrCodes.push(`VVITU${deptCode}${seq}`);
       }
 
       book.qrCodes = [...(book.qrCodes || []), ...newQrCodes];
@@ -216,7 +216,7 @@ const issueBook = async (req, res) => {
         { staffId: userIdentifier }
       ]
     });
-    
+
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found with provided identifier' });
     }
@@ -251,7 +251,7 @@ const getAnalytics = async (req, res) => {
     const totalTitles = books.length;
     const totalCopies = books.reduce((acc, book) => acc + book.totalCopies, 0);
     const availableCopies = books.reduce((acc, book) => acc + book.availableCopies, 0);
-    
+
     const activeTransactions = await Transaction.find({ status: 'Issued' }).populate('user');
     let studentIssuesCount = 0;
     let staffIssuesCount = 0;
@@ -294,7 +294,153 @@ const getTransactions = async (req, res) => {
       .populate('user', 'libraryCardNumber firstName lastName rollNumber staffId email')
       .sort({ issuedDate: -1 });
 
-    res.json({ success: true, transactions });
+    const FINE_PER_DAY = 10;
+    const now = new Date();
+
+    const updatedTransactions = transactions.map(tx => {
+      let currentFine = tx.fine || 0;
+      if (tx.status === 'Issued' && now > new Date(tx.dueDate)) {
+        const diffTime = Math.abs(now - new Date(tx.dueDate));
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        currentFine = diffDays * FINE_PER_DAY;
+      }
+      return { ...tx.toObject(), fine: currentFine };
+    });
+
+    res.json({ success: true, transactions: updatedTransactions });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+};
+
+const returnBook = async (req, res) => {
+  try {
+    const currentUser = await User.findById(req.user.id);
+    if (!['admin', 'librarian'].includes(currentUser.userType)) {
+      return res.status(403).json({ success: false, message: 'Unauthorized' });
+    }
+
+    const transaction = await Transaction.findById(req.params.id);
+    if (!transaction) return res.status(404).json({ success: false, message: 'Transaction not found' });
+    if (transaction.status === 'Returned') return res.status(400).json({ success: false, message: 'Book is already returned' });
+
+    // Calculate final fine
+    const FINE_PER_DAY = 10;
+    const now = new Date();
+    let finalFine = 0;
+    if (now > new Date(transaction.dueDate)) {
+      const diffTime = Math.abs(now - new Date(transaction.dueDate));
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      finalFine = diffDays * FINE_PER_DAY;
+    }
+
+    transaction.status = 'Returned';
+    transaction.returnDate = now;
+    transaction.fine = finalFine;
+    await transaction.save();
+
+    // Increment available copies
+    const Book = require('../models/Book');
+    const book = await Book.findById(transaction.book);
+    if (book) {
+      book.availableCopies += 1;
+      await book.save();
+    }
+
+    res.json({ success: true, message: 'Book returned successfully', data: transaction });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+};
+
+const getRequests = async (req, res) => {
+  try {
+    const currentUser = await User.findById(req.user.id);
+    if (!['admin', 'librarian'].includes(currentUser.userType)) {
+      return res.status(403).json({ success: false, message: 'Unauthorized' });
+    }
+
+    // Librarians can see ALL book requests across the college
+    const requests = await BookRequest.find()
+      .populate('user', 'firstName lastName staffId email rollNumber libraryCardNumber')
+      .populate('book', 'title author')
+      .sort({ requestedAt: -1 });
+
+    res.json({ success: true, requests });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+};
+
+const updateRequestStatus = async (req, res) => {
+  try {
+    const currentUser = await User.findById(req.user.id);
+    if (!['admin', 'librarian'].includes(currentUser.userType)) {
+      return res.status(403).json({ success: false, message: 'Unauthorized' });
+    }
+
+    const { status } = req.body;
+    if (!['Approved', 'Rejected'].includes(status)) {
+      return res.status(400).json({ success: false, message: 'Invalid status' });
+    }
+
+    // Populate the request to access book and student details
+    const request = await BookRequest.findById(req.params.id)
+      .populate('book')
+      .populate('user');
+
+    if (!request) return res.status(404).json({ success: false, message: 'Request not found' });
+    if (request.status !== 'Pending') {
+      return res.status(400).json({ success: false, message: `Request is already ${request.status}` });
+    }
+
+    // When approving, auto-issue the book by creating a Transaction
+    if (status === 'Approved') {
+      const book = request.book;
+
+      if (!book || book.availableCopies <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'No available copies of this book to issue. Cannot approve the request.'
+        });
+      }
+
+      // Find an available QR code (one not currently issued in an active transaction)
+      const activeTransactions = await Transaction.find({ book: book._id, status: 'Issued' }).select('qrCode');
+      const usedQrCodes = new Set(activeTransactions.map(tx => tx.qrCode));
+      const availableQrCode = (book.qrCodes || []).find(qr => !usedQrCodes.has(qr));
+
+      if (!availableQrCode) {
+        return res.status(400).json({
+          success: false,
+          message: 'All physical copies are currently issued. Cannot approve the request.'
+        });
+      }
+
+      // Set due date to 15 days from today (default loan period)
+      const dueDate = new Date();
+      dueDate.setDate(dueDate.getDate() + 15);
+
+      const transaction = new Transaction({
+        book: book._id,
+        qrCode: availableQrCode,
+        user: request.user._id,
+        dueDate,
+        status: 'Issued'
+      });
+
+      await transaction.save();
+
+      // Decrement available copies on the book
+      book.availableCopies -= 1;
+      await book.save();
+    }
+
+    // Update the request status
+    request.status = status;
+    await request.save();
+
+    res.json({ success: true, message: `Request ${status.toLowerCase()} successfully`, data: request });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Server error', error: error.message });
   }
@@ -308,5 +454,8 @@ module.exports = {
   deleteBook,
   issueBook,
   getAnalytics,
-  getTransactions
+  getTransactions,
+  returnBook,
+  getRequests,
+  updateRequestStatus
 };

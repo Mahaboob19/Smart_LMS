@@ -56,12 +56,36 @@ const SignupPage = () => {
     setError('');
   };
 
+  const handleEmailBlur = async () => {
+    if (!formData.email) return;
+    
+    // Basic format check first
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      setEmailStatus({ state: 'invalid', message: 'Invalid email format' });
+      return;
+    }
+
+    setEmailStatus({ state: 'checking', message: 'Verifying email...' });
+    
+    try {
+      const result = await authAPI.checkEmail(formData.email);
+      if (result.success) {
+        setEmailStatus({ state: 'valid', message: 'Email is available and valid' });
+      } else {
+        setEmailStatus({ state: 'invalid', message: result.message || 'Email validation failed' });
+      }
+    } catch (err) {
+      setEmailStatus({ state: 'idle', message: '' });
+      console.error('Email check error:', err);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setSuccess('');
 
-    // Validation
     if (formData.password !== formData.confirmPassword) {
       setError('Passwords do not match');
       return;

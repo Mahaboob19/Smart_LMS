@@ -4,10 +4,13 @@ import { useNavigate } from 'react-router-dom';
 import QRCode from 'react-qr-code';
 import Header from '../components/Header';
 import MinimalFooter from '../components/MinimalFooter';
+import QRScanner from '../components/QRScanner';
 import { authAPI } from '../services/auth';
 import { librarianAPI } from '../services/librarian';
 import { hodAPI } from '../services/hod';
 import { studentAPI } from '../services/student';
+import { adminAPI } from '../services/admin';
+import { departments } from '../utils/departments';
 const DashboardPage = () => {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
@@ -27,6 +30,7 @@ const DashboardPage = () => {
 
   // Transactions State
   const [showIssueBookForm, setShowIssueBookForm] = useState(false);
+  const [showScanner, setShowScanner] = useState(false);
   const [transactions, setTransactions] = useState([]);
   const [allUsers, setAllUsers] = useState([]); // New state for fetched users
   const [newTransaction, setNewTransaction] = useState({
@@ -63,11 +67,31 @@ const DashboardPage = () => {
   const [showRequestBookModal, setShowRequestBookModal] = useState(false);
   const [selectedBookForRequest, setSelectedBookForRequest] = useState(null);
   const [requestReason, setRequestReason] = useState('');
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [selectedBookForReview, setSelectedBookForReview] = useState(null);
+  const [reviewPayload, setReviewPayload] = useState({ rating: 5, comment: '' });
+
+  // Profile State
+  const [profilePasswordForm, setProfilePasswordForm] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: ''
+  });
+
+  // Refresh trigger — bump to force data re-fetch on current section
+  const [refreshCounter, setRefreshCounter] = useState(0);
+
+  // Helper: navigate to a section AND always refresh data
+  const navigateSection = (sectionId) => {
+    setActiveSection(sectionId);
+    setRefreshCounter(prev => prev + 1);
+  };
 
   /* Navigation Arrays for Different Roles */
   const studentNavItems = [
     { name: 'Dashboard', id: 'dashboard' },
     { name: 'Books', id: 'books' },
+    { name: 'My Borrowings', id: 'transactions' },
     { name: 'My Requests', id: 'my-requests' },
     { name: 'Recommendations', id: 'recommendations' },
     { name: 'My Analytics', id: 'analytics' }
@@ -85,6 +109,7 @@ const DashboardPage = () => {
     { name: 'Books', id: 'books' },
     { name: 'Transactions', id: 'transactions' },
     { name: 'Analytics', id: 'analytics' },
+    { name: 'Requests', id: 'requests' },
     { name: 'Messages', id: 'messages' }
   ];
 
@@ -147,6 +172,8 @@ const DashboardPage = () => {
         fetchBooks();
       } else if (activeSection === 'transactions') {
         fetchTransactions();
+      } else if (activeSection === 'requests') {
+        fetchBookRequests();
       } else if (activeSection === 'messages') {
         fetchMessages();
       }
@@ -164,6 +191,7 @@ const DashboardPage = () => {
     } else if (user?.userType === 'student') {
       if (activeSection === 'dashboard' || activeSection === 'analytics') {
         fetchStudentAnalytics();
+        fetchStudentTransactions();
       }
       if (activeSection === 'books') {
         fetchStudentBooks();
@@ -171,9 +199,72 @@ const DashboardPage = () => {
         fetchStudentRecommendations();
       } else if (activeSection === 'my-requests') {
         fetchStudentRequests();
+      } else if (activeSection === 'transactions') {
+        fetchStudentTransactions();
+      }
+    } else if (user?.userType === 'admin') {
+      if (activeSection === 'dashboard' || activeSection === 'analytics') {
+         fetchAnalytics();
+      }
+      if (activeSection === 'users') {
+         fetchSystemUsers();
+      } else if (activeSection === 'books') {
+         fetchBooks();
+      } else if (activeSection === 'transactions') {
+         fetchTransactions();
       }
     }
-  }, [activeSection, searchQuery, user]);
+  }, [activeSection, searchQuery, user, refreshCounter]);
+
+  const handleUpdateUserRole = async (userId, currentRole) => {
+    const newRole = window.prompt(`Enter new role for user (current: ${currentRole}). Valid roles: admin, principal, hod, librarian, staff, student`, currentRole);
+    if (!newRole || newRole === currentRole) return;
+    
+    let department = '';
+    if (newRole === 'hod') {
+      department = window.prompt(`Enter department for HOD. Valid options: ${departments.join(', ')}`);
+      if (!department) return;
+    }
+
+    try {
+      const response = await adminAPI.updateUserRole(userId, { userType: newRole, department });
+      if (response.success) {
+        alert('User role updated successfully');
+        fetchSystemUsers();
+      } else {
+        alert(response.message || 'Failed to update user role');
+      }
+    } catch (error) {
+      alert('Error updating user role');
+    }
+  };
+
+  const handleDeleteUser = async (userId, userName) => {
+    if (!window.confirm(`Are you sure you want to completely delete ${userName}? This action cannot be undone.`)) return;
+    
+    try {
+      const response = await adminAPI.deleteUser(userId);
+      if (response.success) {
+        alert('User deleted successfully');
+        fetchSystemUsers();
+      } else {
+        alert(response.message || 'Failed to delete user');
+      }
+    } catch (error) {
+      alert('Error deleting user');
+    }
+  };
+
+  const fetchSystemUsers = async () => {
+    try {
+      const response = await adminAPI.getAllUsers();
+      if (response.success) {
+        setAllUsers(response.users);
+      }
+    } catch (error) {
+      console.error("Error fetching system users", error);
+    }
+  };
 
   if (loading) {
     return (
@@ -308,26 +399,38 @@ const DashboardPage = () => {
   const handleIssueBook = async (e) => {
     e.preventDefault();
     try {
-      // Calculate dueDate based on issueDays
-      const dueDateStr = new Date(Date.now() + newTransaction.issueDays * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-      
-      const payload = {
+      const response = await librarianAPI.issueBook({
         qrCode: newTransaction.qrCode,
         userIdentifier: newTransaction.userIdentifier,
-        dueDate: dueDateStr
-      };
-
-      const response = await librarianAPI.issueBook(payload);
+        dueDate: new Date(Date.now() + newTransaction.issueDays * 24 * 60 * 60 * 1000)
+      });
       if (response.success) {
         alert('Book issued successfully!');
-        setNewTransaction({ qrCode: '', userIdentifier: '', issueDays: 15 });
         setShowIssueBookForm(false);
-        fetchTransactions();
+        setNewTransaction({ qrCode: '', userIdentifier: '', issueDays: 15 });
+        fetchTransactions(); // Auto-refresh table
+        fetchAnalytics(); // Fast-refresh dashboard counts
       } else {
         alert(response.message || 'Failed to issue book');
       }
     } catch (error) {
       alert('An error occurred while issuing the book');
+    }
+  };
+
+  const handleReturnBook = async (txId) => {
+    try {
+      if (!window.confirm("Confirm the return of this specific book copy?")) return;
+      const response = await librarianAPI.returnBook(txId);
+      if (response.success) {
+        alert('Book returned successfully!');
+        fetchTransactions();
+        fetchAnalytics();
+      } else {
+        alert(response.message || 'Failed to return book');
+      }
+    } catch (error) {
+      alert('An error occurred while returning the book');
     }
   };
 
@@ -426,8 +529,14 @@ const DashboardPage = () => {
 
   const fetchBookRequests = async () => {
     try {
-      const response = await hodAPI.getRequests();
-      if (response.success) {
+      let response;
+      if (user?.userType === 'librarian') {
+        response = await librarianAPI.getRequests();
+      } else {
+        response = await hodAPI.getRequests();
+      }
+
+      if (response && response.success) {
         setBookRequests(response.requests);
       }
     } catch (error) {
@@ -437,15 +546,52 @@ const DashboardPage = () => {
 
   const handleUpdateRequestStatus = async (requestId, status) => {
     try {
-      const response = await hodAPI.updateRequestStatus(requestId, status);
-      if (response.success) {
+      let response;
+      if (user?.userType === 'librarian') {
+        response = await librarianAPI.updateRequestStatus(requestId, status);
+      } else {
+        response = await hodAPI.updateRequestStatus(requestId, status);
+      }
+
+      if (response && response.success) {
         alert(`Request ${status.toLowerCase()} successfully!`);
         fetchBookRequests();
       } else {
-        alert(response.message || 'Failed to update request');
+        alert(response?.message || 'Failed to update request');
       }
     } catch (error) {
       alert('An error occurred while updating the request');
+    }
+  };
+
+  const handleAddReviewSubmit = async (e) => {
+    e.preventDefault();
+    if (!selectedBookForReview) return;
+
+    try {
+      const result = await studentAPI.addReview(selectedBookForReview._id, reviewPayload);
+      if (result.success) {
+        alert('Review submitted successfully!');
+        setShowReviewModal(false);
+        setSelectedBookForReview(null);
+        setReviewPayload({ rating: 5, comment: '' });
+        fetchStudentBooks();
+      } else {
+        alert(result.message || 'Error submitting review');
+      }
+    } catch (err) {
+      alert('An error occurred submitting your review');
+    }
+  };
+
+  const fetchStudentTransactions = async () => {
+    try {
+      const response = await studentAPI.getTransactions();
+      if (response.success) {
+        setTransactions(response.transactions);
+      }
+    } catch (error) {
+      console.error('Failed to fetch student transactions', error);
     }
   };
 
@@ -493,6 +639,28 @@ const DashboardPage = () => {
     }
   };
 
+  const handlePasswordChange = async (e) => {
+    e.preventDefault();
+    if (profilePasswordForm.newPassword !== profilePasswordForm.confirmPassword) {
+      alert("New passwords do not match!");
+      return;
+    }
+    try {
+      const response = await authAPI.changePassword(
+        profilePasswordForm.currentPassword,
+        profilePasswordForm.newPassword
+      );
+      if (response.success) {
+        alert("Password updated successfully!");
+        setProfilePasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      } else {
+        alert(response.message || 'Failed to update password');
+      }
+    } catch (error) {
+      alert("Error updating password");
+    }
+  };
+
   const getUserTypeLabel = () => {
     const typeMap = {
       student: 'Student',
@@ -506,45 +674,7 @@ const DashboardPage = () => {
   };
 
   const renderDashboard = () => {
-    if (user.userType === 'student') {
-      return (
-        <div className="max-w-6xl mx-auto">
-          <div className="mb-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-8">Student Dashboard</h2>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
-                <h4 className="text-sm font-medium text-gray-500 mb-2">Currently Issued</h4>
-                <span className="text-3xl font-bold text-gray-900">{studentAnalyticsStats?.currentlyIssued || 0}</span>
-              </div>
-              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
-                <h4 className="text-sm font-medium text-gray-500 mb-2">Overdue Books</h4>
-                <span className="text-3xl font-bold text-red-600">{studentAnalyticsStats?.overdue || 0}</span>
-              </div>
-              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
-                <h4 className="text-sm font-medium text-gray-500 mb-2">Total Fine</h4>
-                <span className="text-3xl font-bold text-gray-900">${studentAnalyticsStats?.totalFine || 0}</span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div onClick={() => setActiveSection('books')} className="bg-gray-50 rounded-lg p-6 border border-gray-100 cursor-pointer hover:shadow-sm transition-shadow">
-                <h4 className="text-lg font-medium text-gray-900 mb-1">Browse Books</h4>
-                <p className="text-gray-500 text-sm">Search and browse available books</p>
-              </div>
-              <div onClick={() => setActiveSection('recommendations')} className="bg-gray-50 rounded-lg p-6 border border-gray-100 cursor-pointer hover:shadow-sm transition-shadow">
-                <h4 className="text-lg font-medium text-gray-900 mb-1">Recommendations</h4>
-                <p className="text-gray-500 text-sm">View recommended books</p>
-              </div>
-              <div onClick={() => setActiveSection('analytics')} className="bg-gray-50 rounded-lg p-6 border border-gray-100 cursor-pointer hover:shadow-sm transition-shadow">
-                <h4 className="text-lg font-medium text-gray-900 mb-1">My Analytics</h4>
-                <p className="text-gray-500 text-sm">View your library usage statistics</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      );
-    }
 
     return (
       <div className="max-w-6xl mx-auto">
@@ -598,6 +728,12 @@ const DashboardPage = () => {
                 <span className="text-gray-500">Email:</span>
                 <span className="ml-2 font-medium text-gray-900">{user.email}</span>
               </div>
+              {user.libraryCardNumber && (
+                <div>
+                  <span className="text-gray-500">Library Card:</span>
+                  <span className="ml-2 font-medium text-gray-900">{user.libraryCardNumber}</span>
+                </div>
+              )}
               {user.rollNumber && (
                 <div>
                   <span className="text-gray-500">Roll Number:</span>
@@ -676,6 +812,27 @@ const DashboardPage = () => {
             </div>
           </div>
         </div>
+
+        {/* Student Dashboard Specific Layout */}
+        {user.userType === 'student' && (
+          <div className="mt-8 mb-8 space-y-6">
+            <h3 className="text-xl font-bold text-gray-900 mb-2">My Library Overview</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100 hover:shadow-md transition-shadow">
+                <h4 className="text-sm font-medium text-gray-500 mb-2">Currently Issued</h4>
+                <span className="text-3xl font-bold text-gray-900">{studentAnalyticsStats?.currentlyIssued || 0}</span>
+              </div>
+              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100 hover:shadow-md transition-shadow">
+                <h4 className="text-sm font-medium text-gray-500 mb-2">Overdue Books</h4>
+                <span className="text-3xl font-bold text-red-600">{studentAnalyticsStats?.overdue || 0}</span>
+              </div>
+              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100 hover:shadow-md transition-shadow">
+                <h4 className="text-sm font-medium text-gray-500 mb-2">Total Fine</h4>
+                <span className="text-3xl font-bold text-gray-900">₹{studentAnalyticsStats?.totalFine || 0}</span>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Librarian Dashboard Specific Layout */}
         {user.userType === 'librarian' && (
@@ -854,15 +1011,26 @@ const DashboardPage = () => {
                         {['student', 'admin', 'librarian'].includes(user.userType) && (
                           <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                             {user.userType === 'student' ? (
-                              <button
-                                onClick={() => {
-                                  setSelectedBookForRequest(book);
-                                  setShowRequestBookModal(true);
-                                }}
-                                className="text-blue-600 hover:text-blue-900 bg-blue-50 px-3 py-1 rounded-md transition-colors"
-                              >
-                                Request
-                              </button>
+                              <div className="flex justify-end space-x-2">
+                                <button
+                                  onClick={() => {
+                                    setSelectedBookForRequest(book);
+                                    setShowRequestBookModal(true);
+                                  }}
+                                  className="text-blue-600 hover:text-blue-900 bg-blue-50 px-3 py-1 rounded-md transition-colors"
+                                >
+                                  Request
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setSelectedBookForReview(book);
+                                    setShowReviewModal(true);
+                                  }}
+                                  className="text-purple-600 hover:text-purple-900 bg-purple-50 px-3 py-1 rounded-md transition-colors"
+                                >
+                                  Review
+                                </button>
+                              </div>
                             ) : (
                               <div className="flex justify-end space-x-2">
                                 <button
@@ -1213,10 +1381,10 @@ const DashboardPage = () => {
               <h3 className="text-xl font-bold text-gray-800">
                 {user.userType === 'student' ? 'Recommended Books' : 'Book Recommendations'}
               </h3>
-              {user.userType === 'hod' && (
+              {['hod', 'staff', 'admin'].includes(user.userType) && (
                 <button
                   onClick={() => setShowAddRecommendationForm(true)}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors"
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors shadow-sm"
                 >
                   Add Recommendation
                 </button>
@@ -1489,8 +1657,10 @@ const DashboardPage = () => {
                       {req.author && <span className="text-xs text-gray-500 block">by {req.author}</span>}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-500">
-                      {req.user?.firstName} {req.user?.lastName}
-                      <span className="block text-xs">{req.user?.staffId}</span>
+                      <div className="font-medium text-gray-900">{req.user?.firstName} {req.user?.lastName}</div>
+                      <span className="block text-xs mt-0.5 text-blue-600 font-mono">
+                        {req.user?.libraryCardNumber || req.user?.rollNumber || req.user?.staffId || 'N/A'}
+                      </span>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate" title={req.reason}>
                       {req.reason}
@@ -1542,16 +1712,20 @@ const DashboardPage = () => {
   const renderTransactions = () => (
     <div className="max-w-6xl mx-auto">
       <div className="bg-gray-50 rounded-xl p-6 border border-gray-100">
-        {!showIssueBookForm ? (
+        {!showIssueBookForm || user.userType === 'student' ? (
           <>
             <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-semibold text-gray-800">Transactions</h3>
-              <button
-                onClick={() => setShowIssueBookForm(true)}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors"
-              >
-                Issue Book
-              </button>
+              <h3 className="text-xl font-semibold text-gray-800">
+                {user.userType === 'student' ? 'My Borrowings' : 'Transactions'}
+              </h3>
+              {user.userType !== 'student' && (
+                <button
+                  onClick={() => setShowIssueBookForm(true)}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors"
+                >
+                  Issue Book
+                </button>
+              )}
             </div>
 
             <div className="bg-white rounded-lg border border-gray-200 overflow-x-auto">
@@ -1559,11 +1733,16 @@ const DashboardPage = () => {
                 <thead className="bg-gray-50">
                   <tr>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">BOOK</th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">USER ID</th>
+                    {user.userType !== 'student' && (
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">USER ID</th>
+                    )}
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ISSUED DATE</th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">DUE DATE</th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">STATUS</th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">FINE</th>
+                    {user.userType !== 'student' && (
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider text-right">ACTIONS</th>
+                    )}
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -1574,10 +1753,12 @@ const DashboardPage = () => {
                           {tx.book?.title} <br/>
                           <span className="text-xs text-gray-500 font-mono mt-1">QR: {tx.qrCode}</span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {tx.user?.firstName} {tx.user?.lastName} <br/>
-                          <span className="text-xs mt-1">ID: {tx.user?.rollNumber || tx.user?.libraryCardNumber || tx.user?.staffId || tx.user?.email}</span>
-                        </td>
+                        {user.userType !== 'student' && (
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {tx.user?.firstName} {tx.user?.lastName} <br/>
+                            <span className="text-xs mt-1">ID: {tx.user?.rollNumber || tx.user?.libraryCardNumber || tx.user?.staffId || tx.user?.email}</span>
+                          </td>
+                        )}
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(tx.issuedDate).toLocaleDateString()}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(tx.dueDate).toLocaleDateString()}</td>
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -1585,12 +1766,26 @@ const DashboardPage = () => {
                             {tx.status}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${tx.fine}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-semibold">{tx.fine > 0 ? `₹${tx.fine}` : 'No Fine'}</td>
+                        {user.userType !== 'student' && (
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
+                            {tx.status === 'Issued' ? (
+                              <button
+                                onClick={() => handleReturnBook(tx._id)}
+                                className="text-blue-600 hover:text-blue-900 font-medium bg-blue-50 px-3 py-1 rounded-md"
+                              >
+                                Return
+                              </button>
+                            ) : (
+                              <span className="text-gray-400 text-xs">-</span>
+                            )}
+                          </td>
+                        )}
                       </tr>
                     ))
                   ) : (
                     <tr>
-                      <td colSpan="6" className="px-6 py-8 text-center text-sm text-gray-500">
+                      <td colSpan="7" className="px-6 py-8 text-center text-sm text-gray-500">
                         No transactions found.
                       </td>
                     </tr>
@@ -1604,18 +1799,40 @@ const DashboardPage = () => {
             <h3 className="text-xl font-semibold text-gray-800 mb-6 border-b pb-2">Issue Book</h3>
             <form className="space-y-4" onSubmit={handleIssueBook}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Book QR Code (Scan with Mobile/Cable)</label>
+                <div className="md:col-span-2 bg-gray-50 p-4 rounded-xl border border-gray-200">
+                  <div className="flex justify-between items-center mb-2">
+                    <label className="block text-sm font-medium text-gray-700">Book QR Code</label>
+                    <button
+                      type="button"
+                      onClick={() => setShowScanner(!showScanner)}
+                      className="text-sm bg-blue-100 text-blue-700 hover:bg-blue-200 px-3 py-1 rounded-md font-medium transition-colors flex items-center"
+                    >
+                      <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                      {showScanner ? 'Close Scanner' : 'Use Camera Scanner'}
+                    </button>
+                  </div>
+                  
+                  {showScanner && (
+                    <div className="mb-4">
+                      <QRScanner 
+                        onScanSuccess={(decodedText) => {
+                          setNewTransaction(prev => ({ ...prev, qrCode: decodedText }));
+                          setShowScanner(false);
+                        }} 
+                      />
+                    </div>
+                  )}
+
                   <input
                     type="text"
                     value={newTransaction.qrCode}
                     onChange={(e) => setNewTransaction({ ...newTransaction, qrCode: e.target.value.trim() })}
                     className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
-                    placeholder="Scan or enter QR Code"
+                    placeholder="Scan or enter QR Code manually"
                     required
-                    autoFocus
+                    autoFocus={!showScanner}
                   />
-                  <p className="text-xs text-gray-500 mt-1">Scan physical book's QR code</p>
+                  <p className="text-xs text-gray-500 mt-1">Scan the physical book's QR code using the camera or a hand scanner</p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Library Card Number / User ID</label>
@@ -1673,6 +1890,38 @@ const DashboardPage = () => {
     </div>
   );
 
+  const getRecipientRoles = () => {
+    const allOptions = [
+      { value: 'admin', label: 'Admin' },
+      { value: 'principal', label: 'Principal' },
+      { value: 'hod', label: 'HOD' },
+      { value: 'librarian', label: 'Librarian' },
+      { value: 'staff', label: 'Staff' },
+      { value: 'student', label: 'Student' }
+    ];
+    
+    if (user?.userType === 'admin' || user?.userType === 'principal') {
+      return allOptions.filter(o => o.value !== user.userType);
+    }
+    if (user?.userType === 'librarian') {
+      return allOptions.filter(o => o.value !== 'librarian');
+    }
+    if (user?.userType === 'hod') {
+      return [
+        { value: 'principal', label: 'Principal' },
+        { value: 'admin', label: 'Admin' }
+      ];
+    }
+    
+    // Default for students and staff
+    return [
+      { value: 'principal', label: 'Principal' },
+      { value: 'hod', label: 'HOD' },
+      { value: 'librarian', label: 'Librarian' },
+      { value: 'admin', label: 'Admin' }
+    ];
+  };
+
   const renderMessages = () => (
     <div className="max-w-6xl mx-auto">
       <div className="bg-gray-50 rounded-xl p-6 border border-gray-100">
@@ -1681,7 +1930,11 @@ const DashboardPage = () => {
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-xl font-semibold text-gray-800">Messages</h3>
               <button
-                onClick={() => setShowMessageForm(true)}
+                onClick={() => {
+                  const roles = getRecipientRoles();
+                  setNewMessage(prev => ({ ...prev, recipientRole: prev.recipientRole || (roles.length > 0 ? roles[0].value : 'admin') }));
+                  setShowMessageForm(true);
+                }}
                 className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors"
               >
                 Send Message
@@ -1724,9 +1977,11 @@ const DashboardPage = () => {
                   onChange={(e) => setNewMessage({ ...newMessage, recipientRole: e.target.value })}
                   className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  <option value="principal">Principal</option>
-                  <option value="hod">HOD</option>
-                  <option value="admin">Admin</option>
+                  {getRecipientRoles().map((role) => (
+                    <option key={role.value} value={role.value}>
+                      {role.label}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div>
@@ -1776,10 +2031,83 @@ const DashboardPage = () => {
   const renderUsers = () => (
     <div className="max-w-6xl mx-auto">
       <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
-        <h2 className="text-2xl font-bold text-gray-900 mb-4">User Management</h2>
-        <p className="text-gray-600">Manage students, staff, and faculty.</p>
-        <div className="mt-8 flex items-center justify-center h-64 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
-          <p className="text-gray-500">User management grid coming soon...</p>
+        <div className="flex justify-between items-center mb-6">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">User Management</h2>
+            <p className="text-gray-600">Manage students, staff, and faculty.</p>
+          </div>
+          <button
+            onClick={() => navigate('/admin')}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors"
+          >
+            Manage Auth Codes
+          </button>
+        </div>
+
+        <div className="bg-white rounded-lg border border-gray-200 overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">User</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Department/ID</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Joined</th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {allUsers.length > 0 ? (
+                allUsers.map((u) => (
+                  <tr key={u._id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm font-medium text-gray-900">{u.firstName} {u.lastName}</div>
+                      <div className="text-xs text-gray-500">{u.email}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                        ['admin', 'principal'].includes(u.userType) ? 'bg-purple-100 text-purple-800' :
+                        ['hod', 'librarian'].includes(u.userType) ? 'bg-blue-100 text-blue-800' :
+                        u.userType === 'staff' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                      }`}>
+                        {u.userType.toUpperCase()}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {u.department && <div className="font-medium text-gray-900">{u.department}</div>}
+                      <div className="text-xs">{u.rollNumber || u.staffId || u.libraryCardNumber || '-'}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {new Date(u.createdAt).toLocaleDateString()}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      {user._id !== u._id ? (
+                        <div className="flex justify-end space-x-2">
+                          <button
+                            onClick={() => handleUpdateUserRole(u._id, u.userType)}
+                            className="text-blue-600 hover:text-blue-900 bg-blue-50 px-3 py-1 rounded-md transition-colors"
+                          >
+                            Edit Role
+                          </button>
+                          <button
+                            onClick={() => handleDeleteUser(u._id, `${u.firstName} ${u.lastName}`)}
+                            className="text-red-600 hover:text-red-900 bg-red-50 px-3 py-1 rounded-md transition-colors"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-gray-400 font-medium">Current User</span>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="5" className="px-6 py-8 text-center text-sm text-gray-500">No users found.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -1787,16 +2115,164 @@ const DashboardPage = () => {
 
   const renderSettings = () => (
     <div className="max-w-6xl mx-auto">
-      <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
-        <h2 className="text-2xl font-bold text-gray-900 mb-4">System Settings</h2>
-        <p className="text-gray-600">Configure global library settings.</p>
-        <div className="mt-8 flex items-center justify-center h-64 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
-          <p className="text-gray-500">Settings panel coming soon...</p>
+      <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+        <div className="p-8 border-b border-gray-100 bg-gray-50/50">
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">System Settings</h2>
+          <p className="text-gray-600">Configure global library parameters and administrative behaviors.</p>
+        </div>
+        
+        <div className="p-8 space-y-10">
+          {/* Library Policies */}
+          <section>
+            <h3 className="text-lg font-bold text-gray-900 border-b border-gray-200 pb-3 mb-6">Library Policies</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Standard Issue Duration (Days)</label>
+                  <input type="number" defaultValue={15} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Max Books per Student</label>
+                  <input type="number" defaultValue={3} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all" />
+                </div>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Late Return Fine (Per Day)</label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2.5 text-gray-500">$</span>
+                    <input type="number" defaultValue={1.50} step="0.50" className="w-full pl-8 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* User Preferences */}
+          <section>
+            <h3 className="text-lg font-bold text-gray-900 border-b border-gray-200 pb-3 mb-6">System Toggles</h3>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-100">
+                <div>
+                  <h4 className="font-medium text-gray-900">Auto-Approve Staff Requests</h4>
+                  <p className="text-sm text-gray-500">Automatically bypass HOD verification for staff recommendations</p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" className="sr-only peer" defaultChecked />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                </label>
+              </div>
+              
+              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-100">
+                <div>
+                  <h4 className="font-medium text-gray-900">Email Notifications</h4>
+                  <p className="text-sm text-gray-500">Send automated warning emails for overdue items</p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" className="sr-only peer" defaultChecked />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                </label>
+              </div>
+            </div>
+          </section>
+
+          <div className="flex justify-end pt-6 border-t border-gray-100">
+            <button
+              onClick={() => alert("Settings configuration saved successfully!")}
+              className="px-8 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-lg shadow-blue-500/30"
+            >
+              Save Configuration
+            </button>
+          </div>
         </div>
       </div>
     </div>
   );
 
+  const renderProfile = () => (
+    <div className="max-w-4xl mx-auto space-y-8">
+      <div className="bg-white rounded-xl shadow-sm p-8 border border-gray-100">
+        <h3 className="text-2xl font-bold text-gray-900 mb-6 border-b pb-4">My Profile</h3>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+          <div>
+            <h4 className="text-sm font-medium text-gray-500 mb-1">Full Name</h4>
+            <p className="text-lg font-medium text-gray-900">{user.firstName} {user.lastName}</p>
+          </div>
+          <div>
+            <h4 className="text-sm font-medium text-gray-500 mb-1">Email Address</h4>
+            <p className="text-lg font-medium text-gray-900">{user.email}</p>
+          </div>
+          <div>
+            <h4 className="text-sm font-medium text-gray-500 mb-1">Account Role</h4>
+            <p className="text-lg font-medium text-gray-900 capitalize">{user.userType}</p>
+          </div>
+          {user.libraryCardNumber && (
+            <div>
+              <h4 className="text-sm font-medium text-gray-500 mb-1">Library Card Number</h4>
+              <p className="text-lg font-medium text-blue-600 font-mono">{user.libraryCardNumber}</p>
+            </div>
+          )}
+          {user.rollNumber && (
+            <div>
+              <h4 className="text-sm font-medium text-gray-500 mb-1">Roll / ID Number</h4>
+              <p className="text-lg font-medium text-gray-900">{user.rollNumber}</p>
+            </div>
+          )}
+          {user.department && (
+            <div>
+              <h4 className="text-sm font-medium text-gray-500 mb-1">Department</h4>
+              <p className="text-lg font-medium text-gray-900">{user.department}</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl shadow-sm p-8 border border-gray-100">
+        <h3 className="text-xl font-bold text-gray-900 mb-6 border-b pb-4">Change Password</h3>
+        <form onSubmit={handlePasswordChange} className="space-y-4 max-w-md">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Current Password</label>
+            <input
+              type="password"
+              required
+              value={profilePasswordForm.currentPassword}
+              onChange={(e) => setProfilePasswordForm({...profilePasswordForm, currentPassword: e.target.value})}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
+            <input
+              type="password"
+              required
+              value={profilePasswordForm.newPassword}
+              onChange={(e) => setProfilePasswordForm({...profilePasswordForm, newPassword: e.target.value})}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>
+            <input
+              type="password"
+              required
+              value={profilePasswordForm.confirmPassword}
+              onChange={(e) => setProfilePasswordForm({...profilePasswordForm, confirmPassword: e.target.value})}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+            />
+          </div>
+          <div className="pt-2">
+            <button
+              type="submit"
+              className="px-6 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition"
+            >
+              Update Password
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
 
   const renderContent = () => {
     switch (activeSection) {
@@ -1818,6 +2294,8 @@ const DashboardPage = () => {
         return renderUsers();
       case 'settings':
         return renderSettings();
+      case 'profile':
+        return renderProfile();
       case 'dashboard':
       default:
         return renderDashboard();
@@ -1830,11 +2308,87 @@ const DashboardPage = () => {
       <Header
         customNavItems={getNavItems()}
         activeSection={activeSection}
-        onNavClick={setActiveSection}
+        onNavClick={navigateSection}
       />
 
       <div className="container mx-auto px-6 py-16">
         {renderContent()}
+
+        {/* Review Modal */}
+        {showReviewModal && selectedBookForReview && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                <h3 className="text-xl font-bold text-gray-900">Review Book</h3>
+                <button
+                  onClick={() => setShowReviewModal(false)}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="p-6">
+                <div className="flex items-start gap-4 mb-6 p-4 bg-gray-50 rounded-xl">
+                  <div className="w-16 h-20 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <svg className="w-8 h-8 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-gray-900">{selectedBookForReview.title}</h4>
+                    <p className="text-sm text-gray-500">{selectedBookForReview.author}</p>
+                  </div>
+                </div>
+
+                <form onSubmit={handleAddReviewSubmit} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Rating (1-5)</label>
+                    <select
+                      value={reviewPayload.rating}
+                      onChange={(e) => setReviewPayload({...reviewPayload, rating: parseInt(e.target.value)})}
+                      className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="5">5 - Excellent</option>
+                      <option value="4">4 - Very Good</option>
+                      <option value="3">3 - Good</option>
+                      <option value="2">2 - Fair</option>
+                      <option value="1">1 - Poor</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Write your review</label>
+                    <textarea
+                      rows="4"
+                      value={reviewPayload.comment}
+                      onChange={(e) => setReviewPayload({...reviewPayload, comment: e.target.value})}
+                      placeholder="Share your thoughts about this book..."
+                      className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+                    ></textarea>
+                  </div>
+
+                  <div className="pt-4 flex gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowReviewModal(false)}
+                      className="flex-1 px-4 py-3 border border-gray-200 text-gray-700 font-medium rounded-xl hover:bg-gray-50 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="flex-1 px-4 py-3 bg-blue-600 text-white font-medium rounded-xl hover:bg-blue-700 transition-colors shadow-lg shadow-blue-500/30"
+                    >
+                      Submit Review
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <MinimalFooter />

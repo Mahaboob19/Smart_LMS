@@ -118,9 +118,88 @@ const getAdminAuthCodes = async (req, res) => {
   }
 };
 
+const getAllUsers = async (req, res) => {
+  try {
+    const currentUser = await User.findById(req.user.id);
+    if (!['admin', 'principal'].includes(currentUser.userType)) {
+      return res.status(403).json({ success: false, message: 'Unauthorized' });
+    }
+
+    const users = await User.find().select('-password').sort({ createdAt: -1 });
+    res.json({ success: true, users });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+};
+
+const updateUserRole = async (req, res) => {
+  try {
+    const currentUser = await User.findById(req.user.id);
+    if (!['admin', 'principal'].includes(currentUser.userType)) {
+      return res.status(403).json({ success: false, message: 'Unauthorized' });
+    }
+
+    const { id } = req.params;
+    const { userType, department } = req.body;
+
+    const userToUpdate = await User.findById(id);
+    if (!userToUpdate) return res.status(404).json({ success: false, message: 'User not found' });
+
+    // Prevent modifying the super admin or principal if the current user isn't admin
+    if (['admin', 'principal'].includes(userToUpdate.userType) && currentUser.userType !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Cannot modify this user' });
+    }
+
+    userToUpdate.userType = userType || userToUpdate.userType;
+    if (userType === 'hod' && department) {
+      userToUpdate.department = department;
+    }
+
+    await userToUpdate.save();
+
+    const updatedUser = userToUpdate.toObject();
+    delete updatedUser.password;
+
+    res.json({ success: true, message: 'User updated successfully', user: updatedUser });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+};
+
+const deleteUser = async (req, res) => {
+  try {
+    const currentUser = await User.findById(req.user.id);
+    if (!['admin', 'principal'].includes(currentUser.userType)) {
+      return res.status(403).json({ success: false, message: 'Unauthorized' });
+    }
+
+    const { id } = req.params;
+
+    // Prevent deleting oneself
+    if (id === req.user.id) {
+      return res.status(400).json({ success: false, message: 'Cannot delete your own account' });
+    }
+
+    const userToDelete = await User.findById(id);
+    if (!userToDelete) return res.status(404).json({ success: false, message: 'User not found' });
+
+    if (['admin', 'principal'].includes(userToDelete.userType) && currentUser.userType !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Cannot delete this user' });
+    }
+
+    await User.findByIdAndDelete(id);
+    res.json({ success: true, message: 'User deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+};
+
 module.exports = {
   getDepartments,
   getUsersByDepartment,
   generateAdminCode,
-  getAdminAuthCodes
+  getAdminAuthCodes,
+  getAllUsers,
+  updateUserRole,
+  deleteUser
 };

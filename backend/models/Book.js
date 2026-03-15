@@ -8,6 +8,12 @@ const bookSchema = new mongoose.Schema({
     availableCopies: { type: Number, required: true, min: 0 },
     description: { type: String, required: true },
     qrCodes: [{ type: String }],
+    reviews: [{
+        user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+        rating: { type: Number, required: true, min: 1, max: 5 },
+        comment: { type: String },
+        createdAt: { type: Date, default: Date.now }
+    }],
     createdAt: { type: Date, default: Date.now }
 });
 

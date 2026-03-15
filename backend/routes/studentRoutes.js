@@ -6,15 +6,17 @@ const {
   getBooks,
   getRecommendations,
   requestBook,
-  getRequests
+  getRequests,
+  addReview,
+  getTransactions
 } = require('../controllers/studentController');
 
-router.use(verifyToken);
-
-router.get('/analytics', getAnalytics);
-router.get('/books', getBooks);
-router.get('/recommendations', getRecommendations);
-router.post('/request-book', requestBook);
-router.get('/requests', getRequests);
+router.get('/analytics', verifyToken, getAnalytics);
+router.get('/books', verifyToken, getBooks);
+router.get('/recommendations', verifyToken, getRecommendations);
+router.post('/requests', verifyToken, requestBook);
+router.get('/requests', verifyToken, getRequests);
+router.get('/transactions', verifyToken, getTransactions);
+router.post('/books/:id/reviews', verifyToken, addReview);
 
 module.exports = router;

@@ -5,14 +5,19 @@ const {
   getDepartments,
   getUsersByDepartment,
   generateAdminCode,
-  getAdminAuthCodes
+  getAdminAuthCodes,
+  getAllUsers,
+  updateUserRole,
+  deleteUser
 } = require('../controllers/adminController');
 
 router.get('/departments', getDepartments);
+router.get('/users/department/:department', verifyToken, getUsersByDepartment);
+router.post('/admin/generate-code', verifyToken, generateAdminCode);
+router.get('/admin/auth-codes', verifyToken, getAdminAuthCodes);
 
-router.use(verifyToken);
-router.get('/users/department/:department', getUsersByDepartment);
-router.post('/admin/generate-code', generateAdminCode);
-router.get('/admin/auth-codes', getAdminAuthCodes);
+router.get('/users', verifyToken, getAllUsers);
+router.put('/users/:id', verifyToken, updateUserRole);
+router.delete('/users/:id', verifyToken, deleteUser);
 
 module.exports = router;

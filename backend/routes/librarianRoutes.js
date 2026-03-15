@@ -9,24 +9,26 @@ const {
   updateBook,
   deleteBook,
   getTransactions,
-  issueBook
+  issueBook,
+  returnBook,
+  getRequests,
+  updateRequestStatus
 } = require('../controllers/librarianController');
 
 // All endpoints require auth
-router.use(verifyToken);
+router.get('/users', verifyToken, getUsers);
+router.get('/analytics', verifyToken, getAnalytics);
 
-router.get('/users', getUsers);
-router.get('/analytics', getAnalytics);
-
-// Note: In index.js these were mounted on /api/books and /api/transactions directly
-// Since frontend uses /api/books, we can mount these under root, but for cleanliness 
-// we will export them, and in server.js handle the mounting paths properly.
 router.get('/books', getBooks);
-router.post('/books', addBook);
-router.put('/books/:id', updateBook);
-router.delete('/books/:id', deleteBook);
+router.post('/books', verifyToken, addBook);
+router.put('/books/:id', verifyToken, updateBook);
+router.delete('/books/:id', verifyToken, deleteBook);
 
-router.get('/transactions', getTransactions);
-router.post('/transactions/issue', issueBook);
+router.get('/transactions', verifyToken, getTransactions);
+router.post('/transactions/issue', verifyToken, issueBook);
+router.put('/transactions/:id/return', verifyToken, returnBook);
+
+router.get('/requests', verifyToken, getRequests);
+router.put('/requests/:id', verifyToken, updateRequestStatus);
 
 module.exports = router;
