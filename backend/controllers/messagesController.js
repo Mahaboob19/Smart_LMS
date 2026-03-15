@@ -43,7 +43,24 @@ const getMessages = async (req, res) => {
   }
 };
 
+const markAsRead = async (req, res) => {
+  try {
+    const message = await Message.findById(req.params.id);
+    if (!message) {
+      return res.status(404).json({ success: false, message: 'Message not found' });
+    }
+
+    message.isRead = true;
+    await message.save();
+
+    res.json({ success: true, message: 'Message marked as read' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+};
+
 module.exports = {
   sendMessage,
-  getMessages
+  getMessages,
+  markAsRead
 };

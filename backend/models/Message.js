@@ -5,6 +5,7 @@ const messageSchema = new mongoose.Schema({
     recipientRole: { type: String, required: true }, // e.g., 'principal'
     subject: { type: String, required: true },
     content: { type: String, required: true },
+    isRead: { type: Boolean, default: false },
     createdAt: { type: Date, default: Date.now }
 });
 
