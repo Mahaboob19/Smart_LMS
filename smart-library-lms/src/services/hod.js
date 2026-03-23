@@ -14,15 +14,27 @@ const getHeaders = () => {
 export const hodAPI = {
     // Get HOD Analytics
     getAnalytics: async () => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
         try {
+            console.log(`hodAPI: Fetching ${API_BASE_URL}/hod/analytics...`);
             const response = await fetch(`${API_BASE_URL}/hod/analytics`, {
                 method: 'GET',
                 headers: getHeaders(),
+                signal: controller.signal
             });
-            return await response.json();
+            clearTimeout(timeoutId);
+            const data = await response.json();
+            console.log('hodAPI: Analytics data received:', data);
+            return data;
         } catch (error) {
+            clearTimeout(timeoutId);
+            if (error.name === 'AbortError') {
+                console.error('API Error (getAnalytics): Request timed out');
+                return { success: false, message: 'Request timed out. Please check your connection.' };
+            }
             console.error('API Error (getAnalytics):', error);
-            return { success: false, message: 'Network error occurred' };
+            return { success: false, message: 'Network error or server unreachable' };
         }
     },
 

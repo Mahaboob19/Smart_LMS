@@ -360,8 +360,8 @@ const getRequests = async (req, res) => {
       return res.status(403).json({ success: false, message: 'Unauthorized' });
     }
 
-    // Librarians can see ALL book requests across the college
-    const requests = await BookRequest.find()
+    // Librarians see all student pending requests and staff requests that reached them
+    const requests = await BookRequest.find({ status: { $in: ['Pending', 'Librarian_Pending'] } })
       .populate('user', 'firstName lastName staffId email rollNumber libraryCardNumber')
       .populate('book', 'title author')
       .sort({ requestedAt: -1 });
@@ -390,7 +390,7 @@ const updateRequestStatus = async (req, res) => {
       .populate('user');
 
     if (!request) return res.status(404).json({ success: false, message: 'Request not found' });
-    if (request.status !== 'Pending') {
+    if (request.status !== 'Pending' && request.status !== 'Librarian_Pending') {
       return res.status(400).json({ success: false, message: `Request is already ${request.status}` });
     }
 

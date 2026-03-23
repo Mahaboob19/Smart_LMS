@@ -60,7 +60,7 @@ export const studentAPI = {
     // Request a Book
     requestBook: async (bookId, reason) => {
         try {
-            const response = await fetch(`${API_BASE_URL}/student/request-book`, {
+            const response = await fetch(`${API_BASE_URL}/student/requests`, {
                 method: 'POST',
                 headers: getHeaders(),
                 body: JSON.stringify({ bookId, reason })

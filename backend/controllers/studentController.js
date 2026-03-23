@@ -22,7 +22,9 @@ const getAnalytics = async (req, res) => {
         totalIssued,
         currentlyIssued,
         overdue,
-        totalFine
+        totalFine,
+        totalRequests: await BookRequest.countDocuments({ user: student._id }),
+        pendingRequests: await BookRequest.countDocuments({ user: student._id, status: { $ne: 'Approved' } })
       }
     });
   } catch (error) {
@@ -63,10 +65,14 @@ const getRecommendations = async (req, res) => {
     }
 
     const recommendations = await Recommendation.find(query)
-      .populate('recommendedBy', 'firstName lastName')
+      .populate('recommendedBy', 'firstName lastName userType')
       .sort({ createdAt: -1 });
 
-    res.json({ success: true, recommendations });
+    const filteredRecommendations = recommendations.filter(rec => 
+      rec.recommendedBy && rec.recommendedBy.userType === 'hod'
+    );
+
+    res.json({ success: true, recommendations: filteredRecommendations });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Server error', error: error.message });
   }
@@ -75,8 +81,8 @@ const getRecommendations = async (req, res) => {
 const requestBook = async (req, res) => {
   try {
     const student = await User.findById(req.user.id);
-    if (student.userType !== 'student') {
-      return res.status(403).json({ success: false, message: 'Only students can request books' });
+    if (student.userType !== 'student' && student.userType !== 'staff') {
+      return res.status(403).json({ success: false, message: 'Only students and staff can request books' });
     }
 
     const { bookId, reason } = req.body;
@@ -97,7 +103,7 @@ const requestBook = async (req, res) => {
       book: book._id,
       department: requestDepartment,
       reason,
-      status: 'Pending'
+      status: student.userType === 'staff' ? 'HOD_Pending' : 'Pending'
     });
 
     await bookRequest.save();
@@ -111,8 +117,8 @@ const requestBook = async (req, res) => {
 const getRequests = async (req, res) => {
   try {
     const student = await User.findById(req.user.id);
-    if (student.userType !== 'student') {
-      return res.status(403).json({ success: false, message: 'Only students can view their requests here' });
+    if (student.userType !== 'student' && student.userType !== 'staff') {
+      return res.status(403).json({ success: false, message: 'Unauthorized access' });
     }
 
     const requests = await BookRequest.find({ user: student._id })

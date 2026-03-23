@@ -177,7 +177,7 @@ const DashboardPage = () => {
       } else if (activeSection === 'messages') {
         fetchMessages();
       }
-    } else if (user?.userType === 'hod') {
+    } else if (user?.userType === 'hod' || user?.userType === 'principal') {
       if (activeSection === 'dashboard' || activeSection === 'analytics') {
         fetchHodAnalytics();
       }
@@ -212,6 +212,18 @@ const DashboardPage = () => {
          fetchBooks();
       } else if (activeSection === 'transactions') {
          fetchTransactions();
+      }
+    } else if (user?.userType === 'staff') {
+      if (activeSection === 'dashboard' || activeSection === 'analytics') {
+        // Staff dashboard might not have unique analytics yet, but we'll fetch student-style for now
+        fetchStudentAnalytics();
+      }
+      if (activeSection === 'books') {
+        fetchStudentBooks();
+      } else if (activeSection === 'my-requests') {
+        fetchStudentRequests();
+      } else if (activeSection === 'transactions') {
+        fetchStudentTransactions();
       }
     }
   }, [activeSection, searchQuery, user, refreshCounter]);
@@ -493,9 +505,12 @@ const DashboardPage = () => {
       const response = await hodAPI.getAnalytics();
       if (response.success) {
         setHodAnalyticsStats(response.stats);
+      } else {
+        setHodAnalyticsStats({ error: response.message || 'Failed to fetch analytics' });
       }
     } catch (error) {
       console.error('Failed to fetch HOD analytics', error);
+      setHodAnalyticsStats({ error: 'Network error occurred' });
     }
   };
 
@@ -797,7 +812,7 @@ const DashboardPage = () => {
                 </button>
               )}
 
-              {(user.userType === 'admin' || user.userType === 'principal') && (
+              {user.userType === 'admin' && (
                 <button
                   onClick={() => navigate('/admin/management')}
                   className="w-full text-left px-4 py-2 bg-orange-50 text-orange-700 rounded-lg hover:bg-orange-100 transition-colors text-sm font-medium"
@@ -814,7 +829,7 @@ const DashboardPage = () => {
         </div>
 
         {/* Student Dashboard Specific Layout */}
-        {user.userType === 'student' && (
+        {['student', 'staff'].includes(user.userType) && (
           <div className="mt-8 mb-8 space-y-6">
             <h3 className="text-xl font-bold text-gray-900 mb-2">My Library Overview</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -952,9 +967,9 @@ const DashboardPage = () => {
           <>
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-xl font-bold text-gray-800">
-                {user.userType === 'student' ? 'Browse Books' : 'Books Management'}
+                {['student', 'staff'].includes(user.userType) ? 'Browse Books' : 'Books Management'}
               </h3>
-              {user.userType !== 'student' && (
+              {!['student', 'staff'].includes(user.userType) && (
                 <button
                   onClick={() => setShowAddBookForm(true)}
                   className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors"
@@ -982,7 +997,7 @@ const DashboardPage = () => {
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Author</th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Department</th>
                     <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Available / Total</th>
-                    {['student', 'admin', 'librarian'].includes(user.userType) && (
+                    {['student', 'staff', 'admin', 'librarian'].includes(user.userType) && (
                       <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
                     )}
                   </tr>
@@ -1008,9 +1023,9 @@ const DashboardPage = () => {
                           </span>
                           <span className="text-gray-500"> / {book.totalCopies}</span>
                         </td>
-                        {['student', 'admin', 'librarian'].includes(user.userType) && (
+                        {['student', 'staff', 'admin', 'librarian'].includes(user.userType) && (
                           <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                            {user.userType === 'student' ? (
+                            {['student', 'staff'].includes(user.userType) ? (
                               <div className="flex justify-end space-x-2">
                                 <button
                                   onClick={() => {
@@ -1381,7 +1396,7 @@ const DashboardPage = () => {
               <h3 className="text-xl font-bold text-gray-800">
                 {user.userType === 'student' ? 'Recommended Books' : 'Book Recommendations'}
               </h3>
-              {['hod', 'staff', 'admin'].includes(user.userType) && (
+              {['hod', 'admin'].includes(user.userType) && (
                 <button
                   onClick={() => setShowAddRecommendationForm(true)}
                   className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors shadow-sm"
@@ -1480,7 +1495,7 @@ const DashboardPage = () => {
   );
 
   const renderAnalytics = () => {
-    if (user.userType === 'student') {
+    if (user.userType === 'student' || user.userType === 'staff') {
       return (
         <div className="max-w-6xl mx-auto">
           <div className="mb-6">
@@ -1500,7 +1515,15 @@ const DashboardPage = () => {
               </div>
               <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
                 <h4 className="text-sm font-medium text-gray-500 mb-2">Total Fine</h4>
-                <span className="text-3xl font-bold text-gray-900">${studentAnalyticsStats?.totalFine || 0}</span>
+                <span className="text-3xl font-bold text-gray-900">₹{studentAnalyticsStats?.totalFine || 0}</span>
+              </div>
+              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+                <h4 className="text-sm font-medium text-gray-500 mb-2">Total Requests</h4>
+                <span className="text-3xl font-bold text-blue-600">{studentAnalyticsStats?.totalRequests || 0}</span>
+              </div>
+              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+                <h4 className="text-sm font-medium text-gray-500 mb-2">Pending Requests</h4>
+                <span className="text-3xl font-bold text-orange-500">{studentAnalyticsStats?.pendingRequests || 0}</span>
               </div>
             </div>
           </div>
@@ -1508,13 +1531,70 @@ const DashboardPage = () => {
       );
     }
 
-    if (user.userType === 'hod') {
-      if (!hodAnalyticsStats) return <div className="text-center py-10">Loading analytics...</div>;
+    if (user.userType === 'hod' || user.userType === 'principal') {
+      if (!hodAnalyticsStats) return <div className="text-center py-20 flex flex-col items-center justify-center">
+        <svg className="animate-spin h-10 w-10 text-blue-600 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        <p className="text-gray-500 font-medium">Loading analytics...</p>
+      </div>;
+
+      if (hodAnalyticsStats.error) {
+        return (
+          <div className="max-w-4xl mx-auto py-20 text-center">
+            <div className="bg-red-50 border border-red-200 rounded-2xl p-10 shadow-sm">
+              <div className="bg-red-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6">
+                <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <h3 className="text-2xl font-bold text-gray-900 mb-4">Analytics Error</h3>
+              <p className="text-lg text-gray-600 mb-8 max-w-md mx-auto">
+                {hodAnalyticsStats.error}
+              </p>
+              <button 
+                onClick={() => fetchHodAnalytics()}
+                className="px-6 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors"
+              >
+                Try Again
+              </button>
+            </div>
+          </div>
+        );
+      }
+
+      if (hodAnalyticsStats.noDepartment) {
+        return (
+          <div className="max-w-4xl mx-auto py-20 text-center">
+            <div className="bg-orange-50 border border-orange-200 rounded-2xl p-10 shadow-sm">
+              <div className="bg-orange-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6">
+                <svg className="w-8 h-8 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <h3 className="text-2xl font-bold text-gray-900 mb-4">No Department Assigned</h3>
+              <p className="text-lg text-gray-600 mb-8 max-w-md mx-auto">
+                To view analytics, you must be assigned to a department. Please contact the administrator.
+              </p>
+              <div className="flex gap-4 justify-center">
+                <button 
+                  onClick={() => navigateSection('dashboard')}
+                  className="px-6 py-2 bg-white border border-gray-200 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors"
+                >
+                  Go to Dashboard
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
       return (
-        <div className="max-w-6xl mx-auto">
+        <div className="max-w-6xl mx-auto space-y-8">
           <div className="bg-white rounded-xl p-8 border border-gray-100 shadow-sm">
             <h3 className="text-xl font-semibold text-gray-800 mb-6 border-b pb-2">Department Analytics</h3>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
               <div className="bg-gray-50 rounded-xl shadow-sm p-6 border border-gray-200">
                 <h4 className="text-sm font-medium text-gray-500 mb-2">Department</h4>
                 <span className="text-xl font-bold text-gray-900">{hodAnalyticsStats.department}</span>
@@ -1524,6 +1604,10 @@ const DashboardPage = () => {
                 <span className="text-xl font-bold text-gray-900">{hodAnalyticsStats.studentCount}</span>
               </div>
               <div className="bg-gray-50 rounded-xl shadow-sm p-6 border border-gray-200">
+                <h4 className="text-sm font-medium text-gray-500 mb-2">Total Staff</h4>
+                <span className="text-xl font-bold text-gray-900">{hodAnalyticsStats.staffCount}</span>
+              </div>
+              <div className="bg-gray-50 rounded-xl shadow-sm p-6 border border-gray-200">
                 <h4 className="text-sm font-medium text-gray-500 mb-2">Total Transactions</h4>
                 <span className="text-xl font-bold text-gray-900">{hodAnalyticsStats.totalTransactions}</span>
               </div>
@@ -1531,6 +1615,64 @@ const DashboardPage = () => {
                 <h4 className="text-sm font-medium text-gray-500 mb-2">Active Issues</h4>
                 <span className="text-xl font-bold text-gray-900">{hodAnalyticsStats.activeIssues}</span>
               </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl p-8 border border-gray-100 shadow-sm">
+            <h3 className="text-xl font-semibold text-gray-800 mb-6 border-b pb-2">Students in Department</h3>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Roll Number</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Joined</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {hodAnalyticsStats.students?.map((s) => (
+                    <tr key={s._id}>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{s.firstName} {s.lastName}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">{s.rollNumber || s.libraryCardNumber}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{s.email}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(s.createdAt).toLocaleDateString()}</td>
+                    </tr>
+                  ))}
+                  {(!hodAnalyticsStats.students || hodAnalyticsStats.students.length === 0) && (
+                    <tr><td colSpan="4" className="px-6 py-4 text-center text-gray-500">No students found.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl p-8 border border-gray-100 shadow-sm">
+            <h3 className="text-xl font-semibold text-gray-800 mb-6 border-b pb-2">Staff in Department</h3>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Staff ID</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Joined</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {hodAnalyticsStats.staff?.map((s) => (
+                    <tr key={s._id}>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{s.firstName} {s.lastName}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">{s.staffId || s.libraryCardNumber}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{s.email}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(s.createdAt).toLocaleDateString()}</td>
+                    </tr>
+                  ))}
+                  {(!hodAnalyticsStats.staff || hodAnalyticsStats.staff.length === 0) && (
+                    <tr><td colSpan="4" className="px-6 py-4 text-center text-gray-500">No staff members found.</td></tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
@@ -1582,7 +1724,15 @@ const DashboardPage = () => {
   const renderMyRequests = () => (
     <div className="max-w-6xl mx-auto">
       <div className="bg-white rounded-xl p-8 border border-gray-100 shadow-sm">
-        <h3 className="text-xl font-semibold text-gray-800 mb-6 border-b pb-2">My Book Requests</h3>
+        <div className="flex justify-between items-center mb-6 border-b pb-2">
+          <h3 className="text-xl font-semibold text-gray-800">My Book Requests</h3>
+          <button
+            onClick={() => setActiveSection('books')}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+          >
+            New Request
+          </button>
+        </div>
 
         <div className="bg-white rounded-lg border border-gray-200 overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
@@ -1674,7 +1824,7 @@ const DashboardPage = () => {
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      {req.status === 'Pending' && (
+                      {['Pending', 'HOD_Pending', 'Principal_Pending', 'Librarian_Pending'].includes(req.status) && (
                         <div className="flex space-x-2">
                           <button
                             onClick={() => handleUpdateRequestStatus(req._id, 'Approved')}

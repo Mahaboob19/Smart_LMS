@@ -7,7 +7,11 @@ const bookRequestSchema = new mongoose.Schema({
     title: { type: String }, // For new book requests
     author: { type: String }, // For new book requests
     reason: { type: String, required: true },
-    status: { type: String, enum: ['Pending', 'Approved', 'Rejected'], default: 'Pending' },
+    status: { 
+        type: String, 
+        enum: ['Pending', 'HOD_Pending', 'Principal_Pending', 'Librarian_Pending', 'Approved', 'Rejected'], 
+        default: 'Pending' 
+    },
     requestedAt: { type: Date, default: Date.now }
 });
 
